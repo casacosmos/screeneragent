@@ -207,9 +207,9 @@ def analyze_nonattainment_with_map(longitude: float, latitude: float, location_n
                 }
             }, f, indent=2)
         
-        # Save summary report
+        # Save summary report to data folder for comprehensive report generation
         summary_filename = f"nonattainment_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        summary_file = output_manager.get_file_path(summary_filename, "reports")
+        summary_file = output_manager.get_file_path(summary_filename, "data")
         
         with open(summary_file, 'w') as f:
             json.dump({

@@ -71,4 +71,18 @@ docs/_build/
 # Temporary files
 *.tmp
 *.temp
-*.bak 
+*.bak
+
+# Debug and sample files
+debug_*.py
+sample_*.csv
+sample_*.txt
+
+# Legacy and test directories (if not needed in repo)
+# legacy/
+# tests/
+
+# Additional debug files
+debug_habitat_webmap_*.json
+debug_webmap_*.json
+debug_nonattainment_webmap_*.json 

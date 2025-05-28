@@ -51,7 +51,7 @@ class ScreeningReportInput(BaseModel):
     custom_filename: Optional[str] = Field(default=None, description="Custom filename for reports (without extension)")
     include_pdf: bool = Field(default=True, description="Whether to generate PDF report with embedded maps")
     use_llm: bool = Field(default=True, description="Whether to use LLM enhancement for analysis")
-    model_name: str = Field(default="gpt-4o-mini", description="LLM model to use for enhancement")
+    model_name: str = Field(default="grok-3-mini", description="LLM model to use for enhancement")
 
 class AutoDiscoveryInput(BaseModel):
     """Input schema for auto-discovery batch processing"""
@@ -59,12 +59,12 @@ class AutoDiscoveryInput(BaseModel):
     output_format: str = Field(default="both", description="Output format: 'json', 'markdown', 'both'")
     include_pdf: bool = Field(default=True, description="Whether to generate PDF reports with embedded maps")
     use_llm: bool = Field(default=True, description="Whether to use LLM enhancement for analysis")
-    model_name: str = Field(default="gpt-4o-mini", description="LLM model to use for enhancement")
+    model_name: str = Field(default="grok-3-mini", description="LLM model to use for enhancement")
 
 class ScreeningReportTool:
     """Tool for generating comprehensive reports from screening output directories"""
     
-    def __init__(self, output_directory: str, use_llm: bool = True, model_name: str = "gpt-4o-mini"):
+    def __init__(self, output_directory: str, use_llm: bool = True, model_name: str = "grok-3-mini"):
         self.output_directory = Path(output_directory).resolve()
         self.data_directory = self.output_directory / "data"
         self.use_llm = use_llm and LLM_AVAILABLE
@@ -123,6 +123,12 @@ class ScreeningReportTool:
         """Generate comprehensive screening reports"""
         
         print(f"\n🔄 Generating comprehensive screening reports...")
+        print(f"📄 PDF Generation: {'ENABLED (MANDATORY)' if include_pdf else 'DISABLED'}")
+        
+        # Force PDF generation to True - it should always be enabled
+        if not include_pdf:
+            print("⚠️ WARNING: PDF generation was disabled but is MANDATORY - forcing enable")
+            include_pdf = True
         
         # Determine output directory (reports folder)
         reports_dir = self.output_directory / "reports"
@@ -162,26 +168,41 @@ class ScreeningReportTool:
                 output_files['markdown'] = md_file
                 print(f"✅ Markdown report generated: {md_file}")
             
-            # Generate PDF report if requested and available
-            if include_pdf and PDF_AVAILABLE:
-                try:
-                    pdf_generator = ScreeningPDFGenerator(
-                        output_directory=str(self.output_directory),
-                        use_llm=self.use_llm,
-                        model_name=getattr(self, 'model_name', 'gpt-4o-mini')
-                    )
-                    
-                    pdf_filename = f"{custom_filename}.pdf"
-                    pdf_file = pdf_generator.generate_pdf_report(pdf_filename)
-                    output_files['pdf'] = pdf_file
-                    print(f"✅ PDF report generated: {pdf_file}")
-                    
-                except Exception as e:
-                    print(f"⚠️ PDF generation failed: {e}")
-                    print("JSON and Markdown reports still available")
+            # MANDATORY PDF GENERATION - Always attempt to generate PDF
+            pdf_generation_attempted = False
+            if include_pdf:
+                if PDF_AVAILABLE:
+                    try:
+                        print(f"📄 Generating MANDATORY PDF report...")
+                        pdf_generator = ScreeningPDFGenerator(
+                            output_directory=str(self.output_directory),
+                            use_llm=self.use_llm,
+                            model_name=getattr(self, 'model_name', 'grok-3-mini')
+                        )
+                        
+                        pdf_filename = f"{custom_filename}.pdf"
+                        # PDF generator will save directly to the reports directory
+                        pdf_file = pdf_generator.generate_pdf_report(pdf_filename)
+                        output_files['pdf'] = pdf_file
+                        print(f"✅ PDF report generated: {pdf_file}")
+                        pdf_generation_attempted = True
+                        
+                    except Exception as e:
+                        print(f"❌ PDF generation failed: {e}")
+                        print("⚠️ PDF generation is MANDATORY - this is a critical error")
+                        # Still continue with other reports but flag the issue
+                        output_files['pdf_error'] = f"PDF generation failed: {str(e)}"
+                        pdf_generation_attempted = True
+                else:
+                    print("❌ PDF generation not available - install reportlab pillow")
+                    print("⚠️ PDF generation is MANDATORY - missing dependencies")
+                    output_files['pdf_error'] = "PDF generation not available - missing dependencies (reportlab pillow)"
+                    pdf_generation_attempted = True
             
-            elif include_pdf and not PDF_AVAILABLE:
-                print("⚠️ PDF generation requested but not available - install reportlab pillow")
+            # Ensure PDF generation was attempted
+            if not pdf_generation_attempted:
+                print("❌ CRITICAL ERROR: PDF generation was not attempted but is MANDATORY")
+                output_files['pdf_error'] = "PDF generation was not attempted"
             
             return output_files
             
@@ -303,6 +324,13 @@ def auto_discover_and_process(base_output_dir: str = "output",
     
     print(f"🔍 Auto-discovering screening directories in: {base_output_dir}")
     
+    # FORCE PDF generation to True - it is MANDATORY
+    if not include_pdf:
+        print("⚠️ PDF generation was disabled but is MANDATORY - forcing enable")
+        include_pdf = True
+    
+    print(f"📄 PDF Generation: ENABLED (MANDATORY) for all discovered projects")
+    
     screening_dirs = find_screening_directories(base_output_dir)
     
     if not screening_dirs:
@@ -324,11 +352,16 @@ def auto_discover_and_process(base_output_dir: str = "output",
             
             output_files = tool.generate_reports(
                 output_format=output_format,
-                include_pdf=include_pdf
+                include_pdf=True  # Always force PDF generation
             )
             results[str(screening_dir)] = list(output_files.values())
             
-            print(f"✅ Successfully processed {screening_dir.name}")
+            # Check if PDF was generated
+            pdf_generated = any(f.endswith('.pdf') for f in output_files.values())
+            if pdf_generated:
+                print(f"✅ Successfully processed {screening_dir.name} (PDF included)")
+            else:
+                print(f"⚠️ Processed {screening_dir.name} but PDF generation may have failed")
             
         except Exception as e:
             print(f"❌ Error processing {screening_dir.name}: {e}")
@@ -366,8 +399,8 @@ Examples:
     parser.add_argument('--format', choices=['json', 'markdown', 'both'], default='both',
                        help='Output format (default: both)')
     parser.add_argument('--output', help='Custom output filename (without extension)')
-    parser.add_argument('--model', default='gpt-4o-mini',
-                       help='LLM model to use for enhanced processing (default: gpt-4o-mini)')
+    parser.add_argument('--model', default='grok-3-mini',
+                       help='LLM model to use for enhanced processing (default: grok-3-mini)')
     parser.add_argument('--no-llm', action='store_true',
                        help='Disable LLM enhancement and use standard processing')
     parser.add_argument('--no-pdf', action='store_true',
@@ -448,7 +481,7 @@ def generate_comprehensive_screening_report(
     custom_filename: Optional[str] = None,
     include_pdf: bool = True,
     use_llm: bool = True,
-    model_name: str = "gpt-4o-mini"
+    model_name: str = "grok-3-mini"
 ) -> Dict[str, Any]:
     """
     Generate comprehensive environmental screening reports from screening output directory.
@@ -457,18 +490,20 @@ def generate_comprehensive_screening_report(
     generates professional reports in multiple formats (JSON, Markdown, PDF) with embedded
     maps and comprehensive analysis following the 11-section environmental screening schema.
     
+    **CRITICAL: PDF GENERATION IS MANDATORY AND ALWAYS ENABLED**
+    
     **Key Features:**
     - Processes JSON data from data/ folder
     - Embeds maps automatically in PDF by environmental domain
     - Generates all 11 schema sections (Project Info, Executive Summary, etc.)
     - Optional LLM enhancement for intelligent analysis
-    - Professional PDF output suitable for regulatory submission
+    - **Professional PDF output suitable for regulatory submission (MANDATORY)**
     
     Args:
         output_directory: Screening output directory path
         output_format: Output format ('json', 'markdown', 'both')
         custom_filename: Custom filename for reports (optional)
-        include_pdf: Whether to generate PDF with embedded maps
+        include_pdf: Whether to generate PDF with embedded maps (ALWAYS FORCED TO TRUE)
         use_llm: Whether to use LLM enhancement for analysis
         model_name: LLM model to use for enhancement
         
@@ -479,10 +514,18 @@ def generate_comprehensive_screening_report(
         - project_info: Project details extracted from data
         - summary: Analysis summary
         - file_counts: Count of maps, reports, data files processed
+        - pdf_generated: Boolean confirming PDF was created
     """
     
     try:
         print(f"🔄 Generating comprehensive screening reports for: {output_directory}")
+        
+        # FORCE PDF generation to True - it is MANDATORY
+        if not include_pdf:
+            print("⚠️ PDF generation was disabled but is MANDATORY - forcing enable")
+            include_pdf = True
+        
+        print(f"📄 PDF Generation: ENABLED (MANDATORY)")
         
         # Validate directory exists
         if not Path(output_directory).exists():
@@ -499,12 +542,16 @@ def generate_comprehensive_screening_report(
             model_name=model_name
         )
         
-        # Generate reports
+        # Generate reports (PDF is forced to True)
         output_files = tool.generate_reports(
             output_format=output_format,
             custom_filename=custom_filename,
-            include_pdf=include_pdf
+            include_pdf=True  # Always force PDF generation
         )
+        
+        # Check if PDF was generated successfully
+        pdf_generated = 'pdf' in output_files and output_files['pdf']
+        pdf_error = output_files.get('pdf_error')
         
         # Get analysis data for summary
         analysis_data = tool.get_analysis_data()
@@ -514,7 +561,7 @@ def generate_comprehensive_screening_report(
         file_counts = {
             "json_data_files": len(tool.generator.json_files),
             "maps_found": len([f for f in Path(output_directory).glob("maps/*") if f.suffix.lower() in ['.pdf', '.png', '.jpg', '.jpeg']]),
-            "reports_generated": len(output_files)
+            "reports_generated": len([f for f in output_files.values() if not f.startswith('PDF generation')])
         }
         
         # Create summary
@@ -525,12 +572,25 @@ def generate_comprehensive_screening_report(
             if hasattr(project_info, 'project_name'):
                 summary += f" ({project_info.project_name})"
         
+        # Add PDF generation status to summary
+        if pdf_generated:
+            summary += f". PDF report successfully generated."
+        elif pdf_error:
+            summary += f". WARNING: PDF generation failed - {pdf_error}"
+        
         print(f"✅ Generated {len(output_files)} report files successfully")
+        if pdf_generated:
+            print(f"📄 PDF report confirmed: {output_files['pdf']}")
+        elif pdf_error:
+            print(f"❌ PDF generation issue: {pdf_error}")
         
         return {
             "success": True,
             "output_files": list(output_files.values()),
             "output_formats": list(output_files.keys()),
+            "pdf_generated": pdf_generated,
+            "pdf_file": output_files.get('pdf', 'Not generated'),
+            "pdf_error": pdf_error,
             "project_info": {
                 "project_name": project_info.project_name if project_info else "Unknown",
                 "cadastral_numbers": project_info.cadastral_numbers if project_info else [],
@@ -540,7 +600,7 @@ def generate_comprehensive_screening_report(
             "summary": summary,
             "file_counts": file_counts,
             "llm_enhanced": use_llm and LLM_AVAILABLE,
-            "pdf_generated": include_pdf and PDF_AVAILABLE,
+            "pdf_mandatory_status": "PDF generation is MANDATORY and was attempted",
             "output_directory": output_directory
         }
         
@@ -550,6 +610,8 @@ def generate_comprehensive_screening_report(
             "success": False,
             "error": str(e),
             "output_directory": output_directory,
+            "pdf_generated": False,
+            "pdf_error": f"Report generation failed: {str(e)}",
             "suggestion": "Check that the directory contains valid JSON data files and required dependencies are installed"
         }
 
@@ -560,7 +622,7 @@ def auto_discover_and_generate_reports(
     output_format: str = "both", 
     include_pdf: bool = True,
     use_llm: bool = True,
-    model_name: str = "gpt-4o-mini"
+    model_name: str = "grok-3-mini"
 ) -> Dict[str, Any]:
     """
     Auto-discover screening directories and generate comprehensive reports for all projects.
@@ -569,16 +631,19 @@ def auto_discover_and_generate_reports(
     and generates comprehensive environmental reports for each project found. Perfect for
     batch processing multiple screening projects.
     
+    **CRITICAL: PDF GENERATION IS MANDATORY AND ALWAYS ENABLED**
+    
     **Features:**
     - Automatic discovery of screening directories with data/ folders
     - Batch processing of multiple projects
     - Comprehensive reports for each project
+    - **PDF reports with embedded maps for all projects (MANDATORY)**
     - Summary statistics of processing results
     
     Args:
         base_output_dir: Base directory to search for screening projects
         output_format: Output format ('json', 'markdown', 'both')
-        include_pdf: Whether to generate PDF reports with embedded maps
+        include_pdf: Whether to generate PDF reports with embedded maps (ALWAYS FORCED TO TRUE)
         use_llm: Whether to use LLM enhancement for analysis
         model_name: LLM model to use for enhancement
         
@@ -588,38 +653,61 @@ def auto_discover_and_generate_reports(
         - projects_processed: List of processed project details
         - summary_stats: Statistics about processing results
         - failed_projects: List of projects that failed processing
+        - pdf_generation_summary: Summary of PDF generation results
     """
     
     try:
         print(f"🔍 Auto-discovering screening directories in: {base_output_dir}")
         
-        # Use existing auto-discovery function
+        # FORCE PDF generation to True - it is MANDATORY
+        if not include_pdf:
+            print("⚠️ PDF generation was disabled but is MANDATORY - forcing enable")
+            include_pdf = True
+        
+        print(f"📄 PDF Generation: ENABLED (MANDATORY) for all projects")
+        
+        # Use existing auto-discovery function (with forced PDF generation)
         results = auto_discover_and_process(
             base_output_dir=base_output_dir,
             use_llm=use_llm,
             output_format=output_format,
-            include_pdf=include_pdf
+            include_pdf=True  # Always force PDF generation
         )
         
         # Process results
         successful_projects = []
         failed_projects = []
+        pdf_success_count = 0
+        pdf_failure_count = 0
         
         for directory, files in results.items():
             project_name = Path(directory).name
             if files:
+                # Check if PDF was generated
+                pdf_files = [f for f in files if f.endswith('.pdf')]
+                pdf_generated = len(pdf_files) > 0
+                
+                if pdf_generated:
+                    pdf_success_count += 1
+                else:
+                    pdf_failure_count += 1
+                
                 successful_projects.append({
                     "project_name": project_name,
                     "directory": directory,
                     "reports_generated": len(files),
-                    "output_files": files
+                    "output_files": files,
+                    "pdf_generated": pdf_generated,
+                    "pdf_files": pdf_files
                 })
             else:
                 failed_projects.append({
                     "project_name": project_name,
                     "directory": directory,
-                    "error": "No reports generated"
+                    "error": "No reports generated",
+                    "pdf_generated": False
                 })
+                pdf_failure_count += 1
         
         # Summary statistics
         total_projects = len(results)
@@ -632,19 +720,31 @@ def auto_discover_and_generate_reports(
             "successful_projects": successful_count,
             "failed_projects": failed_count,
             "total_reports_generated": total_reports,
-            "success_rate": f"{(successful_count/total_projects*100):.1f}%" if total_projects > 0 else "0%"
+            "success_rate": f"{(successful_count/total_projects*100):.1f}%" if total_projects > 0 else "0%",
+            "pdf_success_count": pdf_success_count,
+            "pdf_failure_count": pdf_failure_count,
+            "pdf_success_rate": f"{(pdf_success_count/total_projects*100):.1f}%" if total_projects > 0 else "0%"
+        }
+        
+        pdf_generation_summary = {
+            "total_projects": total_projects,
+            "pdf_generated_successfully": pdf_success_count,
+            "pdf_generation_failed": pdf_failure_count,
+            "pdf_mandatory_status": "PDF generation is MANDATORY for all projects"
         }
         
         print(f"✅ Batch processing complete: {successful_count}/{total_projects} projects successful")
+        print(f"📄 PDF Generation: {pdf_success_count}/{total_projects} PDFs generated successfully")
         
         return {
             "success": successful_count > 0,
             "projects_processed": successful_projects,
             "failed_projects": failed_projects,
             "summary_stats": summary_stats,
+            "pdf_generation_summary": pdf_generation_summary,
             "base_directory": base_output_dir,
             "llm_enhanced": use_llm and LLM_AVAILABLE,
-            "pdf_generated": include_pdf and PDF_AVAILABLE
+            "pdf_mandatory_status": "PDF generation is MANDATORY and was attempted for all projects"
         }
         
     except Exception as e:
@@ -653,6 +753,8 @@ def auto_discover_and_generate_reports(
             "success": False,
             "error": str(e),
             "base_directory": base_output_dir,
+            "pdf_generated": False,
+            "pdf_error": f"Auto-discovery failed: {str(e)}",
             "suggestion": "Ensure the base directory exists and contains screening project directories"
         }
 

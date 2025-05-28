@@ -27,6 +27,7 @@ from langchain_core.output_parsers import PydanticOutputParser, JsonOutputParser
 from langchain_core.runnables import RunnableSequence, RunnableParallel, RunnableLambda
 from pydantic import BaseModel, Field
 from langchain.chat_models import init_chat_model
+from langchain_xai import ChatXAI
 
 # Import existing dataclasses from the original generator
 from comprehensive_report_generator import (
@@ -71,14 +72,14 @@ class DataExtractionSummary(BaseModel):
 class EnhancedComprehensiveReportGenerator(ComprehensiveReportGenerator):
     """Enhanced report generator with LLM capabilities"""
     
-    def __init__(self, data_directory: str, model_name: str = "gpt-4o-mini", use_llm: bool = True):
+    def __init__(self, data_directory: str, model_name: str = "grok-3-mini", use_llm: bool = True):
         super().__init__(data_directory)
         self.use_llm = use_llm
         
         if self.use_llm:
             try:
                 # Initialize LLM
-                self.llm = init_chat_model(model_name, model_provider="openai")
+                self.llm = init_chat_model(model_name, model_provider="xai")
                 
                 # Set up LLM chains
                 self._setup_llm_chains()
@@ -123,12 +124,7 @@ Analyze these factors and provide a structured assessment considering:
 Provide specific reasoning for your assessment based on the data provided."""
         )
         
-        risk_parser = PydanticOutputParser(pydantic_object=EnvironmentalRiskAssessment)
-        
-        self.risk_assessment_chain = RunnableSequence([
-            risk_prompt,
-            self.llm.with_structured_output(EnvironmentalRiskAssessment),
-        ])
+        self.risk_assessment_chain = risk_prompt | self.llm.with_structured_output(EnvironmentalRiskAssessment)
         
         # Executive Summary Chain
         summary_prompt = ChatPromptTemplate.from_template(
@@ -155,10 +151,7 @@ Create a compelling, professional executive summary that:
 Focus on practical implications for development and regulatory compliance."""
         )
         
-        self.executive_summary_chain = RunnableSequence([
-            summary_prompt,
-            self.llm.with_structured_output(ExecutiveSummaryGeneration),
-        ])
+        self.executive_summary_chain = summary_prompt | self.llm.with_structured_output(ExecutiveSummaryGeneration)
         
         # Data Integration Chain
         integration_prompt = ChatPromptTemplate.from_template(
@@ -176,10 +169,7 @@ Create integrated summaries that:
 Focus on creating clear, technical summaries suitable for environmental professionals."""
         )
         
-        self.data_integration_chain = RunnableSequence([
-            integration_prompt,
-            self.llm.with_structured_output(DataExtractionSummary),
-        ])
+        self.data_integration_chain = integration_prompt | self.llm.with_structured_output(DataExtractionSummary)
         
         # Missing Data Chain for handling incomplete information
         data_gap_prompt = ChatPromptTemplate.from_template(
@@ -200,10 +190,7 @@ Based on the available information, provide:
 Be conservative in your assumptions and clearly flag areas needing additional investigation."""
         )
         
-        self.data_gap_chain = RunnableSequence([
-            data_gap_prompt,
-            self.llm,
-        ])
+        self.data_gap_chain = data_gap_prompt | self.llm
     
     def extract_with_llm_enhancement(self) -> Dict[str, Any]:
         """Extract and enhance data using LLM chains"""
@@ -239,6 +226,7 @@ Be conservative in your assumptions and clearly flag areas needing additional in
             'wetland': self.extract_wetland_analysis(),
             'habitat': self.extract_critical_habitat_analysis(),
             'air_quality': self.extract_air_quality_analysis(),
+            'karst': self.extract_karst_analysis(),
         }
     
     def _prepare_llm_input(self, base_data: Dict[str, Any]) -> Dict[str, str]:
@@ -272,6 +260,7 @@ Be conservative in your assumptions and clearly flag areas needing additional in
         # Executive summary generation
         enhanced_input = {
             **llm_input,
+            'property_info': llm_input['property_data'],
             'environmental_analysis': data_summary.integrated_assessment,
             'risk_assessment': risk_assessment.reasoning
         }
@@ -331,7 +320,8 @@ Be conservative in your assumptions and clearly flag areas needing additional in
                 enhanced_data.get('flood'),
                 enhanced_data.get('wetland'),
                 enhanced_data.get('habitat'),
-                enhanced_data.get('air_quality')
+                enhanced_data.get('air_quality'),
+                enhanced_data.get('karst')
             )
             cumulative_risk["enhanced_assessment"] = False
         
@@ -349,10 +339,11 @@ Be conservative in your assumptions and clearly flag areas needing additional in
                 enhanced_data.get('flood'),
                 enhanced_data.get('wetland'),
                 enhanced_data.get('habitat'),
-                enhanced_data.get('air_quality')
+                enhanced_data.get('air_quality'),
+                enhanced_data.get('karst')
             ),
             cadastral_analysis=enhanced_data.get('cadastral'),
-            karst_analysis=None,  # Not implemented in current data
+            karst_analysis=enhanced_data.get('karst'),
             flood_analysis=enhanced_data.get('flood'),
             wetland_analysis=enhanced_data.get('wetland'),
             critical_habitat_analysis=enhanced_data.get('habitat'),
@@ -480,8 +471,8 @@ def main():
     parser.add_argument('--format', choices=['json', 'markdown', 'both'], default='both', 
                        help='Output format (default: both)')
     parser.add_argument('--output', help='Output filename (without extension)')
-    parser.add_argument('--model', default='gpt-4o-mini', 
-                       help='LLM model to use (default: gpt-4o-mini)')
+    parser.add_argument('--model', default='grok-3-mini', 
+                       help='LLM model to use (default: grok-3-mini)')
     parser.add_argument('--no-llm', action='store_true', 
                        help='Disable LLM enhancement and use standard processing')
     

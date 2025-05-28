@@ -17,8 +17,12 @@ Features:
 import os
 import re
 from datetime import datetime
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 from pathlib import Path
+
+# LangChain tool imports for the new intelligent directory creation tool
+from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 class OutputDirectoryManager:
     """Manages custom output directories for environmental screening projects"""
@@ -39,7 +43,8 @@ class OutputDirectoryManager:
         location_name: Optional[str] = None,
         coordinates: Optional[Tuple[float, float]] = None,
         cadastral_number: Optional[str] = None,
-        custom_name: Optional[str] = None
+        custom_name: Optional[str] = None,
+        project_description: Optional[str] = None
     ) -> str:
         """
         Create a custom project directory for environmental screening
@@ -49,40 +54,65 @@ class OutputDirectoryManager:
             coordinates: Tuple of (longitude, latitude)
             cadastral_number: Cadastral number if applicable
             custom_name: Custom project name override (used exactly as provided)
+            project_description: Descriptive project context (e.g., "Residential Development Environmental Assessment")
             
         Returns:
             Path to the created project directory
         """
         
-        # Generate project name
+        # Generate project name with improved priority for meaningful names
         if custom_name:
             # Use custom name exactly as provided - no sanitization or timestamp
             project_name = custom_name
             full_project_name = custom_name
+        elif project_description:
+            # Use project description as primary name source
+            project_name = project_description
+            # Sanitize project name for filesystem
+            sanitized_name = self._sanitize_directory_name(project_name)
+            # Add timestamp to ensure uniqueness
+            timestamp = datetime.now().strftime("%Y-%m-%d_at_%H.%M.%S")
+            full_project_name = f"{sanitized_name}_{timestamp}"
         elif location_name:
-            project_name = location_name
+            # Use location name but enhance with context
+            if project_description:
+                project_name = f"{location_name} - {project_description}"
+            else:
+                project_name = f"{location_name} Environmental Assessment"
             # Sanitize project name for filesystem
             sanitized_name = self._sanitize_directory_name(project_name)
             # Add visually appealing timestamp to ensure uniqueness
             timestamp = datetime.now().strftime("%Y-%m-%d_at_%H.%M.%S")
             full_project_name = f"{sanitized_name}_{timestamp}"
         elif cadastral_number:
-            project_name = f"Cadastral_{cadastral_number}"
+            # Create descriptive name for cadastral-based projects
+            if project_description:
+                project_name = f"{project_description} - Cadastral {cadastral_number}"
+            else:
+                project_name = f"Property Assessment - Cadastral {cadastral_number}"
             # Sanitize project name for filesystem
             sanitized_name = self._sanitize_directory_name(project_name)
             # Add visually appealing timestamp to ensure uniqueness
             timestamp = datetime.now().strftime("%Y-%m-%d_at_%H.%M.%S")
             full_project_name = f"{sanitized_name}_{timestamp}"
         elif coordinates:
+            # Use coordinates but with better contextual naming
             lon, lat = coordinates
-            project_name = f"Coordinates_{lon:.6f}_{lat:.6f}"
+            if project_description:
+                project_name = f"{project_description} - Location {lat:.4f}°N {abs(lon):.4f}°W"
+            else:
+                project_name = f"Environmental Assessment - Location {lat:.4f}°N {abs(lon):.4f}°W"
             # Sanitize project name for filesystem
             sanitized_name = self._sanitize_directory_name(project_name)
             # Add visually appealing timestamp to ensure uniqueness
             timestamp = datetime.now().strftime("%Y-%m-%d_at_%H.%M.%S")
             full_project_name = f"{sanitized_name}_{timestamp}"
         else:
-            project_name = "Environmental_Screening"
+            # Default with project context if available
+            if project_description:
+                project_name = project_description
+            else:
+                project_name = "Environmental Screening Project"
             # Sanitize project name for filesystem
             sanitized_name = self._sanitize_directory_name(project_name)
             # Add visually appealing timestamp to ensure uniqueness
@@ -226,7 +256,8 @@ def create_screening_directory(
     location_name: Optional[str] = None,
     coordinates: Optional[Tuple[float, float]] = None,
     cadastral_number: Optional[str] = None,
-    custom_name: Optional[str] = None
+    custom_name: Optional[str] = None,
+    project_description: Optional[str] = None
 ) -> str:
     """
     Convenience function to create a screening project directory
@@ -236,6 +267,7 @@ def create_screening_directory(
         coordinates: Tuple of (longitude, latitude)
         cadastral_number: Cadastral number if applicable
         custom_name: Custom project name override (used exactly as provided)
+        project_description: Descriptive project context (e.g., "Residential Development Environmental Assessment")
         
     Returns:
         Path to the created project directory
@@ -245,7 +277,8 @@ def create_screening_directory(
         location_name=location_name,
         coordinates=coordinates,
         cadastral_number=cadastral_number,
-        custom_name=custom_name
+        custom_name=custom_name,
+        project_description=project_description
     )
 
 def get_screening_file_path(filename: str, file_type: str = "reports") -> str:
@@ -271,6 +304,141 @@ def get_current_project_info() -> Dict[str, Any]:
     """
     manager = get_output_manager()
     return manager.get_project_info()
+
+# LangChain tool imports for the new intelligent directory creation tool
+from langchain_core.tools import tool
+from pydantic import BaseModel, Field
+
+class ProjectDirectoryInput(BaseModel):
+    """Input schema for intelligent project directory creation"""
+    project_description: Optional[str] = Field(default="Environmental Assessment", description="Descriptive project context (e.g., 'Residential Development Environmental Assessment', 'Marina Construction Screening')")
+    location_name: Optional[str] = Field(default=None, description="Human-readable location name (e.g., 'Cataño, Puerto Rico')")
+    cadastral_number: Optional[str] = Field(default=None, description="Cadastral number (e.g., '227-052-007-20')")
+    coordinates: Optional[List[float]] = Field(default=None, description="Coordinates as [longitude, latitude]")
+
+@tool("create_intelligent_project_directory", args_schema=ProjectDirectoryInput)
+def create_intelligent_project_directory(
+    project_description: Optional[str] = "Environmental Assessment",
+    location_name: Optional[str] = None,
+    cadastral_number: Optional[str] = None,
+    coordinates: Optional[List[float]] = None
+) -> Dict[str, Any]:
+    """
+    Create an intelligent project directory with descriptive naming based on project context.
+    
+    This tool should be called FIRST in every environmental screening workflow to establish
+    the project directory structure before running any analysis tools.
+    
+    Args:
+        project_description: Descriptive project context (optional, defaults to "Environmental Assessment")
+        location_name: Human-readable location name (optional)
+        cadastral_number: Cadastral number (optional)
+        coordinates: Coordinates as [longitude, latitude] (optional)
+        
+    Returns:
+        Dictionary containing:
+        - success: Boolean indicating success
+        - project_directory: Path to created project directory
+        - project_name: Generated descriptive project name
+        - directory_structure: Information about created subdirectories
+    """
+    
+    try:
+        print(f"📁 Creating intelligent project directory for: {project_description or 'Environmental Assessment'}")
+        
+        # Convert coordinates to tuple if provided
+        coords_tuple = None
+        if coordinates and len(coordinates) == 2:
+            coords_tuple = (coordinates[0], coordinates[1])  # (longitude, latitude)
+        
+        # Create intelligent project name
+        project_name = create_intelligent_project_name(
+            location_name=location_name,
+            cadastral_number=cadastral_number,
+            coordinates=coords_tuple,
+            project_description=project_description
+        )
+        
+        # Create project directory using the output manager
+        output_manager = get_output_manager()
+        project_dir = output_manager.create_project_directory(project_name)
+        
+        print(f"✅ Created project directory: {project_dir}")
+        print(f"📂 Project name: {project_name}")
+        
+        return {
+            "success": True,
+            "project_directory": str(project_dir),
+            "project_name": project_name,
+            "directory_structure": {
+                "reports": str(Path(project_dir) / "reports"),
+                "maps": str(Path(project_dir) / "maps"),
+                "logs": str(Path(project_dir) / "logs"),
+                "data": str(Path(project_dir) / "data")
+            },
+            "message": f"Successfully created intelligent project directory: {project_name}",
+            "project_description": project_description or "Environmental Assessment",
+            "location_info": {
+                "location_name": location_name,
+                "cadastral_number": cadastral_number,
+                "coordinates": coordinates
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ Error creating intelligent project directory: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "project_description": project_description or "Environmental Assessment",
+            "suggestion": "Ensure the project description and location information are valid"
+        }
+
+# Export the new tool
+PROJECT_DIRECTORY_TOOLS = [create_intelligent_project_directory]
+
+def create_intelligent_project_name(
+    location_name: Optional[str] = None,
+    cadastral_number: Optional[str] = None,
+    coordinates: Optional[Tuple[float, float]] = None,
+    project_description: Optional[str] = None
+) -> str:
+    """
+    Create an intelligent, descriptive project name based on available information.
+    
+    Args:
+        location_name: Human-readable location name (e.g., "Cataño, Puerto Rico")
+        cadastral_number: Cadastral number (e.g., "227-052-007-20")
+        coordinates: Tuple of (longitude, latitude)
+        project_description: Descriptive project context (e.g., "Residential Development Environmental Assessment")
+    
+    Returns:
+        Descriptive project name
+    """
+    
+    # Use project description if provided
+    if project_description:
+        if location_name:
+            project_name = f"{location_name} - {project_description}"
+        elif cadastral_number:
+            project_name = f"{project_description} - Cadastral {cadastral_number}"
+        else:
+            project_name = project_description
+    elif location_name:
+        project_name = f"Environmental Assessment - {location_name}"
+    elif cadastral_number:
+        project_name = f"Environmental Assessment - Cadastral {cadastral_number}"
+    elif coordinates:
+        lon, lat = coordinates
+        if lon < 0:  # Western hemisphere
+            project_name = f"Environmental Assessment - Location {lat:.4f}°N {abs(lon):.4f}°W"
+        else:  # Eastern hemisphere
+            project_name = f"Environmental Assessment - Location {lat:.4f}°N {lon:.4f}°E"
+    else:
+        # Fallback to generic name with timestamp
+        project_name = f"Environmental Assessment - {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    
+    return project_name
 
 if __name__ == "__main__":
     print("📁 Output Directory Manager for Environmental Screening")

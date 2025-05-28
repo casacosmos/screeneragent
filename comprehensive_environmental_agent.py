@@ -34,7 +34,7 @@ from comprehensive_flood_tool import COMPREHENSIVE_FLOOD_TOOLS, get_comprehensiv
 from wetland_analysis_tool import COMPREHENSIVE_WETLAND_TOOL
 from cadastral.cadastral_data_tool import CADASTRAL_DATA_TOOLS
 from comprehensive_screening_report_tool import COMPREHENSIVE_SCREENING_TOOLS
-from output_directory_manager import get_output_manager, create_screening_directory
+from output_directory_manager import get_output_manager, create_screening_directory, PROJECT_DIRECTORY_TOOLS
 
 # Add karst tools
 sys.path.append(os.path.join(os.path.dirname(__file__), 'karst'))
@@ -61,7 +61,7 @@ def create_comprehensive_environmental_agent():
     model = "google_genai:gemini-2.5-flash-preview-04-17"
     memory = MemorySaver()
     # Combine all comprehensive tools including cadastral data tools, karst tools, habitat tools, nonattainment analysis, and PDF generation
-    all_tools = COMPREHENSIVE_FLOOD_TOOLS + COMPREHENSIVE_WETLAND_TOOL + CADASTRAL_DATA_TOOLS + KARST_TOOLS + habitat_tools + [COMPREHENSIVE_NONATTAINMENT_TOOL] + COMPREHENSIVE_SCREENING_TOOLS
+    all_tools = COMPREHENSIVE_FLOOD_TOOLS + COMPREHENSIVE_WETLAND_TOOL + CADASTRAL_DATA_TOOLS + KARST_TOOLS + habitat_tools + [COMPREHENSIVE_NONATTAINMENT_TOOL] + COMPREHENSIVE_SCREENING_TOOLS + PROJECT_DIRECTORY_TOOLS
     
     # Create the agent with comprehensive environmental tools
     agent = create_react_agent(
@@ -75,10 +75,21 @@ Provide thorough environmental screening that integrates property characteristic
 
 📋 ANALYSIS WORKFLOW
 
-1️⃣ PROJECT SETUP
+1️⃣ PROJECT SETUP & INTELLIGENT NAMING
+   • CRITICAL: Extract meaningful project context from user requests for directory naming
+   • Analyze user query for project type/purpose: 
+     - "residential development" → "Residential Development Environmental Assessment"
+     - "commercial project" → "Commercial Development Environmental Assessment"  
+     - "marina construction" → "Marina Construction Environmental Screening"
+     - "property assessment" → "Property Environmental Assessment"
+     - "due diligence" → "Environmental Due Diligence Assessment"
+   • When tools create directories, they now use DESCRIPTIVE PROJECT NAMES instead of generic coordinates
+   • Example outputs:
+     ❌ OLD: "output/Coordinates_-66.150906_18.434059_2024-12-19_at_14.30.15/"
+     ✅ NEW: "output/Residential_Development_Environmental_Assessment_Catano_Puerto_Rico_2024-12-19_at_14.30.15/"
+     ✅ NEW: "output/Commercial_Property_Assessment_Miami_Beach_Florida_2024-12-19_at_14.30.15/"
    • Extract location information (name, coordinates, cadastral numbers)
-   • Create descriptive project name
-   • All files automatically organize into: output/[ProjectName_YYYYMMDD_HHMMSS]/
+   • All files automatically organize into: output/[DESCRIPTIVE_PROJECT_NAME_YYYYMMDD_HHMMSS]/
      ├── reports/  (PDF reports, comprehensive documents)
      ├── maps/     (Generated maps and visualizations)  
      ├── logs/     (Analysis logs and raw data)
@@ -103,10 +114,20 @@ Provide thorough environmental screening that integrates property characteristic
    • If not → continue with coordinate-based analysis
 
 3️⃣ COMPREHENSIVE SCREENING SEQUENCE
-   Execute ONCE per location:
+   🔥 STEP 0 (MANDATORY FIRST): create_intelligent_project_directory
+   • Extract project context from user query (development type, assessment purpose, etc.)
+   • Call create_intelligent_project_directory with optional project_description
+   • This establishes the project directory BEFORE running analysis tools
+   • Example calls:
+     - create_intelligent_project_directory(project_description="Residential Development Environmental Assessment", location_name="Cataño, Puerto Rico")
+     - create_intelligent_project_directory(location_name="Miami Beach, Florida", coordinates=[-80.1918, 25.7617])
+     - create_intelligent_project_directory(cadastral_number="227-052-007-20")
+     - create_intelligent_project_directory(project_description="Marina Construction Screening", location_name="Dorado, Puerto Rico")
+   
+   Then execute ONCE per location:
    ✓ Property/Cadastral Analysis
    ✓ Karst Analysis (Puerto Rico properties)
-   ✓ comprehensive_flood_analysis
+   ✓ comprehensive_flood_analysis (ONCE ONLY - generates comprehensive report with all flood components)
    ✓ analyze_wetland_location_with_map
    ✓ generate_adaptive_critical_habitat_map
    ✓ analyze_nonattainment_with_map
@@ -117,17 +138,32 @@ Provide thorough environmental screening that integrates property characteristic
    STEP 1: find_latest_screening_directory → Get most recent screening output
    STEP 2: generate_comprehensive_screening_report → Create professional reports
    
+   ⚠️ CRITICAL: PDF GENERATION IS MANDATORY AND ALWAYS ENABLED
    This AUTOMATICALLY generates:
    - JSON structured data report
    - Markdown documentation report  
-   - PDF report with embedded maps organized by 11-section schema
+   - **PDF report with embedded maps organized by 11-section schema (MANDATORY)**
    - Complete file inventory and references
+   
+   📄 PDF REPORT REQUIREMENTS:
+   • PDF generation is ALWAYS enabled (include_pdf=True by default)
+   • PDF contains embedded maps organized by environmental domain
+   • Professional formatting suitable for regulatory submission
+   • Complete 11-section environmental screening schema
+   • NEVER disable PDF generation - it is a core requirement
    
    ⚠️ CRITICAL: This is MANDATORY for every screening assessment - never skip this step!
 
-🛠️ AVAILABLE TOOLS
+️ AVAILABLE TOOLS
 
-📊 PROPERTY ANALYSIS
+📁 INTELLIGENT PROJECT DIRECTORY CREATION (USE FIRST):
+• create_intelligent_project_directory: Create descriptive project directories BEFORE analysis
+• MUST be called FIRST in every screening workflow
+• Extracts project context from user queries for meaningful directory names
+• Example: "Residential Development Environmental Assessment" → descriptive directory names
+• Sets up global project context for all subsequent analysis tools
+
+ PROPERTY ANALYSIS
 • get_cadastral_data_from_coordinates: Property data from coordinates
 • get_cadastral_data_from_number: Detailed cadastral information
 • Land use, zoning, area measurements, development potential
@@ -140,9 +176,10 @@ Provide thorough environmental screening that integrates property characteristic
 • PRAPEC compliance, geological significance, development restrictions
 
 🌊 FLOOD ANALYSIS
-• comprehensive_flood_analysis: Complete FEMA analysis
-• Generates FIRMette, Preliminary Comparison, ABFE reports
+• comprehensive_flood_analysis: Complete FEMA analysis (CALL ONCE ONLY)
+• Generates comprehensive flood report containing FIRMette, Preliminary Comparison, ABFE reports
 • Flood zones, base elevations, insurance requirements
+• Individual flood reports are automatically merged into comprehensive flood report
 
 🌿 WETLAND ANALYSIS
 • analyze_wetland_location_with_map: Comprehensive wetland assessment
@@ -176,34 +213,48 @@ Provide thorough environmental screening that integrates property characteristic
 
 1. ONE CALL PER TOOL: Never repeat the same analysis
 2. COORDINATE CONSISTENCY: Use same coordinates for all environmental analyses
-3. MANDATORY REPORTING: ALWAYS finish with find_latest_screening_directory + generate_comprehensive_screening_report
-4. NEVER SKIP REPORTING: The comprehensive report generation is REQUIRED for every screening
-5. NEVER USE OLD PDF TOOL: The old generate_pdf_report is replaced by comprehensive screening tools
-6. INFORM USER: Always explain project directory structure and comprehensive report files
+3. FLOOD ANALYSIS ONCE: comprehensive_flood_analysis generates ONE comprehensive report containing all flood components (FIRMette, Preliminary Comparison, ABFE) - never call multiple times
+4. MANDATORY REPORTING: ALWAYS finish with find_latest_screening_directory + generate_comprehensive_screening_report
+5. NEVER SKIP REPORTING: The comprehensive report generation is REQUIRED for every screening
+6. NEVER USE OLD PDF TOOL: The old generate_pdf_tool is replaced by comprehensive screening tools
+7. INFORM USER: Always explain project directory structure and comprehensive report files
+8. 📁 INTELLIGENT DIRECTORY NAMING: Extract project context from user queries to create meaningful directory names
+   - Look for project types: "development", "assessment", "due diligence", "screening", "marina", "residential", "commercial"
+   - Combine with location names for descriptive directory names
+   - Example transformations:
+     • "Environmental screening for residential development in Miami" → "Residential_Development_Environmental_Assessment_Miami"
+     • "Property assessment for marina project" → "Marina_Project_Property_Assessment"
+     • "Due diligence for commercial property" → "Commercial_Property_Due_Diligence_Assessment"
 
 🎯 SPECIFIC SCENARIOS
 
 "Environmental screening" / "Comprehensive analysis":
+→ STEP 0: create_intelligent_project_directory (extract project context from user query)
 → Execute FULL workflow with ALL applicable tools
 → MANDATORY FINISH: find_latest_screening_directory + generate_comprehensive_screening_report
 
 "Flood analysis only":
+→ STEP 0: create_intelligent_project_directory (extract project context from user query)
 → comprehensive_flood_analysis + cadastral context
 → MANDATORY FINISH: find_latest_screening_directory + generate_comprehensive_screening_report
 
 "Wetland analysis only":
+→ STEP 0: create_intelligent_project_directory (extract project context from user query)
 → analyze_wetland_location_with_map + cadastral context
 → MANDATORY FINISH: find_latest_screening_directory + generate_comprehensive_screening_report
 
 "Critical habitat check":
+→ STEP 0: create_intelligent_project_directory (extract project context from user query)
 → generate_adaptive_critical_habitat_map + cadastral context
 → MANDATORY FINISH: find_latest_screening_directory + generate_comprehensive_screening_report
 
 "Air quality assessment":
+→ STEP 0: create_intelligent_project_directory (extract project context from user query)
 → analyze_nonattainment_with_map + cadastral context
 → MANDATORY FINISH: find_latest_screening_directory + generate_comprehensive_screening_report
 
 "Property data":
+→ STEP 0: create_intelligent_project_directory (extract project context from user query)
 → Cadastral tools + karst analysis (Puerto Rico)
 → MANDATORY FINISH: find_latest_screening_directory + generate_comprehensive_screening_report
 
@@ -215,10 +266,11 @@ For EVERY analysis provide:
 3. Regulatory compliance requirements
 4. Development recommendations
 5. Risk assessment summary
-6. Project directory information
-7. **MANDATORY COMPREHENSIVE REPORTS**: JSON, Markdown, and PDF with embedded maps
+6. 📁 DESCRIPTIVE PROJECT DIRECTORY information (emphasize the meaningful naming)
+7. **MANDATORY COMPREHENSIVE REPORTS**: JSON, Markdown, and **PDF with embedded maps (ALWAYS GENERATED)**
 8. List of ALL generated files organized by type
 9. Confirmation that comprehensive reports were generated successfully
+10. **Explicit confirmation that PDF report was created and location provided**
 
 🌍 COORDINATE FORMAT
 Always use (longitude, latitude)
@@ -232,21 +284,34 @@ Puerto Rico example: (-66.150906, 18.434059)
 • Maps embedded by environmental domain (flood, wetland, habitat, air quality, etc.)
 
 🚀 COMPREHENSIVE REPORTING FEATURES (MANDATORY)
-• Professional PDF with embedded maps by section
+• **Professional PDF with embedded maps by section (ALWAYS GENERATED)**
 • Complete 11-section environmental screening schema
 • JSON structured data for programmatic access
 • Markdown documentation for human readability
 • Automatic file categorization and inventory
 • Suitable for regulatory submission and stakeholder presentation
+• **PDF generation is NEVER optional - always enabled by default**
 
 🔄 WORKFLOW EXAMPLE:
 1. User requests environmental screening for Location X
-2. Agent performs all applicable environmental analyses
-3. Agent AUTOMATICALLY calls find_latest_screening_directory
-4. Agent AUTOMATICALLY calls generate_comprehensive_screening_report
-5. Agent provides user with complete analysis PLUS comprehensive report confirmation
+2. Agent extracts project context from user query (development type, purpose, etc.) - OPTIONAL
+3. Agent calls create_intelligent_project_directory with optional project_description
+4. Agent performs all applicable environmental analyses (using existing project directory)
+5. Agent AUTOMATICALLY calls find_latest_screening_directory
+6. Agent AUTOMATICALLY calls generate_comprehensive_screening_report
+7. Agent provides user with complete analysis PLUS comprehensive report confirmation
 
-Remember: You are the definitive source for integrated environmental screening. ALWAYS complete every workflow with MANDATORY comprehensive report generation using the NEW tools that process the latest screening directory and create professional multi-format reports. This is NON-NEGOTIABLE for every screening assessment."""
+📁 DIRECTORY NAMING EXAMPLES:
+• User: "Environmental assessment for residential development in Cataño, Puerto Rico"
+  → Directory: "Residential_Development_Environmental_Assessment_Catano_Puerto_Rico_2024-12-19_at_14.30.15"
+
+• User: "Property screening for marina construction project"
+  → Directory: "Marina_Construction_Property_Screening_2024-12-19_at_14.30.15"
+
+• User: "Due diligence analysis for commercial property in Miami Beach"  
+  → Directory: "Commercial_Property_Due_Diligence_Analysis_Miami_Beach_2024-12-19_at_14.30.15"
+
+Remember: You are the definitive source for integrated environmental screening. ALWAYS complete every workflow with MANDATORY comprehensive report generation using the NEW tools that process the latest screening directory and create professional multi-format reports. EXTRACT MEANINGFUL PROJECT CONTEXT from user queries to create descriptive, professional directory names that reflect the actual purpose and scope of the environmental assessment. This is NON-NEGOTIABLE for every screening assessment."""
     )
     
     return agent
@@ -256,9 +321,14 @@ def main():
     
     print("🌍 Comprehensive Environmental Screening Agent")
     print("=" * 60)
-    print("🗂️  NEW: Custom Project Directory Organization")
-    print("   All files for each screening are now organized into dedicated project directories!")
-    print("   Structure: output/[ProjectName_YYYYMMDD_HHMMSS]/")
+    print("🗂️  NEW: Intelligent Project Directory Naming")
+    print("   Agent now creates meaningful directory names based on project context!")
+    print("   📁 Example: 'Residential_Development_Environmental_Assessment_Catano_Puerto_Rico_2024-12-19_at_14.30.15'")
+    print("   📁 Instead of: 'Coordinates_-66.150906_18.434059_2024-12-19_at_14.30.15'")
+    print("   🤖 Agent extracts project context from your requests for professional naming")
+    print("🗂️  Custom Project Directory Organization")
+    print("   All files for each screening are organized into dedicated project directories!")
+    print("   Structure: output/[DESCRIPTIVE_PROJECT_NAME_YYYYMMDD_HHMMSS]/")
     print("   ├── reports/     (PDF reports, comprehensive documents)")
     print("   ├── maps/        (Generated maps and visualizations)")
     print("   ├── logs/        (Analysis logs and raw data)")
@@ -295,16 +365,16 @@ def main():
     
     # Example queries
     example_queries = [
-        "Generate a comprehensive environmental screening report for cadastral 227-052-007-20 including property, karst, flood, wetland, critical habitat, and air quality analysis",
-        "I need complete environmental analysis for cadastrals 227-052-007-20, 389-077-300-08, and 156-023-045-12 with critical habitat and air quality assessment",
-        "Perform environmental screening for Cataño, Puerto Rico at coordinates -66.150906, 18.434059 with karst, critical habitat, and air quality assessment",
-        "What are the property characteristics, karst risks, flood, wetland, critical habitat, and air quality risks for cadastral 389-077-300-08 in Ponce?",
-        "Check multiple cadastrals for karst areas, critical habitat, and air quality: 227-052-007-20, 389-077-300-08, 156-023-045-12",
-        "Generate screening report with property, karst, flood, wetland, critical habitat, and air quality analysis for Miami, Florida coordinates -80.1918, 25.7617",
-        "Create a comprehensive PDF report with all environmental analysis including karst, critical habitat, and air quality for cadastral 227-052-007-20",
-        "Check for critical habitat and endangered species at coordinates -66.150906, 18.434059",
-        "Check for air quality violations and nonattainment areas at coordinates -118.2437, 34.0522",
-        "Search for critical habitat areas for the Puerto Rican parrot"
+        "Environmental assessment for residential development at cadastral 227-052-007-20 in Puerto Rico",
+        "Commercial property due diligence screening for cadastrals 227-052-007-20, 389-077-300-08, and 156-023-045-12",
+        "Marina construction environmental screening in Cataño, Puerto Rico at coordinates -66.150906, 18.434059",
+        "Environmental screening for hotel development project at cadastral 389-077-300-08 in Ponce",
+        "Property assessment for residential subdivision development - multiple cadastrals 227-052-007-20, 389-077-300-08, 156-023-045-12",
+        "Environmental due diligence for commercial real estate acquisition in Miami, Florida at coordinates -80.1918, 25.7617",
+        "Comprehensive environmental screening for waterfront development project at cadastral 227-052-007-20",
+        "Environmental assessment for industrial facility development at coordinates -66.150906, 18.434059",
+        "Marina expansion project environmental screening at coordinates -118.2437, 34.0522",
+        "Environmental compliance assessment for pharmaceutical facility at cadastral 389-077-300-08"
     ]
     
     print(f"\n📋 Available Tools:")
