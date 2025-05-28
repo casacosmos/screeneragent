@@ -1,0 +1,873 @@
+#!/usr/bin/env python3
+"""
+MIPR Karst Tools for LangGraph Agents
+
+This module provides LangGraph tools for checking PRAPEC karst areas using 
+cadastral numbers as input, with capabilities to identify nearest karst areas
+and provide comprehensive karst analysis.
+
+Tools:
+- check_cadastral_karst: Check if a single cadastral is in PRAPEC karst area
+- check_multiple_cadastrals_karst: Check multiple cadastrals for PRAPEC karst
+- find_nearest_karst: Find the nearest PRAPEC karst area to a cadastral
+- analyze_cadastral_karst_proximity: Comprehensive karst proximity analysis
+"""
+
+import sys
+import os
+from datetime import datetime
+from typing import Dict, Any, List, Optional
+from pydantic import BaseModel, Field
+
+# Add parent directories to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+
+from langchain_core.tools import tool
+from prapec_karst_checker import PrapecKarstChecker
+from cadastral.cadastral_search import MIPRCadastralSearch
+
+# Pydantic models for tool input schemas
+class SingleCadastralKarstInput(BaseModel):
+    """Input schema for single cadastral karst checking"""
+    cadastral_number: str = Field(description="Cadastral number to check for PRAPEC karst (e.g., '227-052-007-20')")
+    buffer_miles: Optional[float] = Field(default=0.5, description="Buffer distance in miles for proximity search (default: 0.5)")
+    include_buffer_search: Optional[bool] = Field(default=True, description="Whether to search within buffer if not directly in karst")
+
+class MultipleCadastralsKarstInput(BaseModel):
+    """Input schema for multiple cadastrals karst checking"""
+    cadastral_numbers: List[str] = Field(description="List of cadastral numbers to check for PRAPEC karst")
+    buffer_miles: Optional[float] = Field(default=0.5, description="Buffer distance in miles for proximity search (default: 0.5)")
+    include_buffer_search: Optional[bool] = Field(default=True, description="Whether to search within buffer if not directly in karst")
+
+class NearestKarstInput(BaseModel):
+    """Input schema for finding nearest karst area"""
+    cadastral_number: str = Field(description="Cadastral number to find nearest PRAPEC karst area")
+    max_search_miles: Optional[float] = Field(default=5.0, description="Maximum search distance in miles (default: 5.0)")
+
+class KarstProximityAnalysisInput(BaseModel):
+    """Input schema for comprehensive karst proximity analysis"""
+    cadastral_numbers: List[str] = Field(description="List of cadastral numbers for comprehensive karst analysis")
+    analysis_radius_miles: Optional[float] = Field(default=2.0, description="Analysis radius in miles (default: 2.0)")
+
+@tool("check_cadastral_karst", args_schema=SingleCadastralKarstInput)
+def check_cadastral_karst(
+    cadastral_number: str, 
+    buffer_miles: Optional[float] = 0.5,
+    include_buffer_search: Optional[bool] = True
+) -> Dict[str, Any]:
+    """
+    Check if a cadastral number falls within PRAPEC karst areas.
+    
+    This tool checks whether a specific cadastral parcel intersects with or is near
+    the PRAPEC (Plan y Reglamento del Área de Planificación Especial del Carso) 
+    karst regulation areas in Puerto Rico.
+    
+    The PRAPEC area covers approximately 87,375 hectares of karst terrain and is
+    governed by Regulation 259, requiring special environmental considerations.
+    
+    Args:
+        cadastral_number: The cadastral number to check (e.g., '227-052-007-20')
+        buffer_miles: Buffer distance in miles for proximity search (default: 0.5)
+        include_buffer_search: Whether to search within buffer if not directly in karst
+        
+    Returns:
+        Dictionary containing:
+        - karst_status: Whether cadastral is in karst ('direct', 'nearby', 'none')
+        - cadastral_info: Property details (municipality, classification, area)
+        - karst_details: PRAPEC area information if found
+        - regulatory_implications: Regulatory considerations
+        - distance_analysis: Distance to karst area
+    """
+    
+    print(f"🏔️ Checking cadastral {cadastral_number} for PRAPEC karst areas...")
+    
+    try:
+        # Initialize karst checker
+        checker = PrapecKarstChecker()
+        
+        # Perform karst check
+        result = checker.check_cadastral(
+            cadastral_number=cadastral_number,
+            buffer_miles=buffer_miles,
+            include_buffer_search=include_buffer_search
+        )
+        
+        if not result['success']:
+            return {
+                "success": False,
+                "error": result.get('error', 'Unknown error'),
+                "cadastral_number": cadastral_number,
+                "query_time": datetime.now().isoformat()
+            }
+        
+        # Process results for agent consumption
+        summary = {
+            "success": True,
+            "cadastral_number": cadastral_number,
+            "query_time": datetime.now().isoformat(),
+            "buffer_miles": buffer_miles
+        }
+        
+        # Karst status analysis
+        if result['in_karst']:
+            summary["karst_status"] = "direct_intersection"
+            summary["karst_proximity"] = "direct"
+            summary["distance_miles"] = 0
+            summary["regulatory_impact"] = "high"
+            summary["message"] = "Cadastral directly intersects with PRAPEC karst area - subject to karst regulations"
+        elif result['karst_proximity'] == 'nearby':
+            summary["karst_status"] = "nearby_karst"
+            summary["karst_proximity"] = "nearby"
+            summary["distance_miles"] = result['distance_miles']
+            summary["regulatory_impact"] = "moderate"
+            summary["message"] = f"PRAPEC karst area found within {result['distance_miles']} miles - potential regulatory considerations"
+        else:
+            summary["karst_status"] = "no_karst"
+            summary["karst_proximity"] = "none"
+            summary["distance_miles"] = f"> {buffer_miles}"
+            summary["regulatory_impact"] = "none"
+            summary["message"] = f"No PRAPEC karst area within {buffer_miles} miles"
+        
+        # Add cadastral property information
+        if result.get('cadastral_info'):
+            cadastral_info = result['cadastral_info']
+            summary["property_details"] = {
+                "municipality": cadastral_info['municipality'],
+                "land_use_classification": cadastral_info['classification'],
+                "area_m2": cadastral_info['area_m2'],
+                "area_hectares": cadastral_info['area_m2'] / 10000
+            }
+        
+        # Add karst area details if found
+        if result.get('karst_info'):
+            karst_info = result['karst_info']
+            summary["karst_area_details"] = {
+                "official_name": karst_info['nombre'],
+                "regulation_number": karst_info['regla'],
+                "total_area_hectares": karst_info['area_hectares'],
+                "description": karst_info['description']
+            }
+            
+            # Add regulatory implications
+            summary["regulatory_implications"] = {
+                "regulation": f"Regulation {karst_info['regla']}",
+                "area_type": "Special Planning Area (Karst)",
+                "environmental_considerations": "Karst terrain requires special environmental impact assessment",
+                "development_restrictions": "Development may be subject to additional restrictions and permits",
+                "geological_significance": "Area contains important karst geological formations"
+            }
+        
+        # Add data source information
+        summary["data_source"] = {
+            "service": "MIPR Reglamentario_va2 MapServer",
+            "layer": "PRAPEC (Carso) - Layer 15",
+            "authority": "Puerto Rico Planning Board (Junta de Planificación)"
+        }
+        
+        return summary
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "cadastral_number": cadastral_number,
+            "query_time": datetime.now().isoformat()
+        }
+
+@tool("check_multiple_cadastrals_karst", args_schema=MultipleCadastralsKarstInput)
+def check_multiple_cadastrals_karst(
+    cadastral_numbers: List[str],
+    buffer_miles: Optional[float] = 0.5,
+    include_buffer_search: Optional[bool] = True
+) -> Dict[str, Any]:
+    """
+    Check multiple cadastral numbers for PRAPEC karst areas.
+    
+    This tool performs batch checking of multiple cadastral parcels to determine
+    their relationship to PRAPEC karst areas. Provides comprehensive analysis
+    including summary statistics and individual results.
+    
+    Args:
+        cadastral_numbers: List of cadastral numbers to check
+        buffer_miles: Buffer distance in miles for proximity search (default: 0.5)
+        include_buffer_search: Whether to search within buffer if not directly in karst
+        
+    Returns:
+        Dictionary containing:
+        - batch_summary: Overall statistics for all cadastrals
+        - karst_analysis: Breakdown by karst proximity
+        - individual_results: Detailed results for each cadastral
+        - regulatory_summary: Overall regulatory implications
+        - recommendations: Analysis-based recommendations
+    """
+    
+    print(f"🏔️ Checking {len(cadastral_numbers)} cadastrals for PRAPEC karst areas...")
+    
+    try:
+        # Initialize karst checker
+        checker = PrapecKarstChecker()
+        
+        # Perform batch karst check
+        result = checker.check_multiple_cadastrals(
+            cadastral_numbers=cadastral_numbers,
+            buffer_miles=buffer_miles,
+            include_buffer_search=include_buffer_search
+        )
+        
+        if not result['success']:
+            return {
+                "success": False,
+                "error": "Batch karst check failed",
+                "cadastral_numbers": cadastral_numbers,
+                "query_time": datetime.now().isoformat()
+            }
+        
+        # Process results for agent consumption
+        summary = {
+            "success": True,
+            "total_cadastrals": len(cadastral_numbers),
+            "query_time": datetime.now().isoformat(),
+            "buffer_miles": buffer_miles
+        }
+        
+        # Batch summary statistics
+        batch_stats = result['summary']
+        summary["batch_summary"] = {
+            "total_checked": len(cadastral_numbers),
+            "directly_in_karst": batch_stats['in_karst'],
+            "nearby_karst": batch_stats['nearby_karst'],
+            "no_karst": batch_stats['no_karst'],
+            "errors": batch_stats['errors'],
+            "success_rate": ((len(cadastral_numbers) - batch_stats['errors']) / len(cadastral_numbers)) * 100
+        }
+        
+        # Karst proximity analysis
+        summary["karst_analysis"] = {
+            "high_impact_cadastrals": batch_stats['in_karst'],
+            "moderate_impact_cadastrals": batch_stats['nearby_karst'],
+            "no_impact_cadastrals": batch_stats['no_karst'],
+            "percentage_affected": ((batch_stats['in_karst'] + batch_stats['nearby_karst']) / len(cadastral_numbers)) * 100 if len(cadastral_numbers) > 0 else 0
+        }
+        
+        # Add karst area details if found
+        if result.get('karst_info'):
+            karst_info = result['karst_info']
+            summary["karst_area_details"] = {
+                "official_name": karst_info['nombre'],
+                "regulation_number": karst_info['regla'],
+                "total_area_hectares": karst_info['area_hectares'],
+                "description": karst_info['description']
+            }
+        
+        # Process individual results
+        individual_results = []
+        high_impact_cadastrals = []
+        moderate_impact_cadastrals = []
+        
+        for cad_result in result['cadastral_results']:
+            if cad_result['success']:
+                processed_result = {
+                    "cadastral_number": cad_result['cadastral_number'],
+                    "karst_status": "direct" if cad_result['in_karst'] else "nearby" if cad_result['karst_proximity'] == 'nearby' else "none",
+                    "distance_miles": cad_result['distance_miles'],
+                    "regulatory_impact": "high" if cad_result['in_karst'] else "moderate" if cad_result['karst_proximity'] == 'nearby' else "none"
+                }
+                
+                if cad_result.get('cadastral_info'):
+                    processed_result["municipality"] = cad_result['cadastral_info']['municipality']
+                    processed_result["classification"] = cad_result['cadastral_info']['classification']
+                    processed_result["area_hectares"] = cad_result['cadastral_info']['area_m2'] / 10000
+                
+                individual_results.append(processed_result)
+                
+                # Categorize for recommendations
+                if cad_result['in_karst']:
+                    high_impact_cadastrals.append(cad_result['cadastral_number'])
+                elif cad_result['karst_proximity'] == 'nearby':
+                    moderate_impact_cadastrals.append(cad_result['cadastral_number'])
+            else:
+                individual_results.append({
+                    "cadastral_number": cad_result['cadastral_number'],
+                    "karst_status": "error",
+                    "error": cad_result.get('error', 'Unknown error')
+                })
+        
+        summary["individual_results"] = individual_results
+        
+        # Regulatory summary and recommendations
+        if batch_stats['in_karst'] > 0 or batch_stats['nearby_karst'] > 0:
+            summary["regulatory_summary"] = {
+                "regulation_applicable": f"Regulation {result['karst_info']['regla']}" if result.get('karst_info') else "Regulation 259",
+                "environmental_assessment_required": batch_stats['in_karst'] > 0,
+                "special_permits_may_be_required": batch_stats['in_karst'] > 0,
+                "geological_studies_recommended": (batch_stats['in_karst'] + batch_stats['nearby_karst']) > 0
+            }
+            
+            summary["recommendations"] = []
+            
+            if high_impact_cadastrals:
+                summary["recommendations"].append({
+                    "priority": "high",
+                    "action": "Environmental Impact Assessment",
+                    "cadastrals": high_impact_cadastrals,
+                    "description": "These cadastrals directly intersect with PRAPEC karst areas and require comprehensive environmental assessment"
+                })
+            
+            if moderate_impact_cadastrals:
+                summary["recommendations"].append({
+                    "priority": "moderate",
+                    "action": "Geological Survey",
+                    "cadastrals": moderate_impact_cadastrals,
+                    "description": "These cadastrals are near karst areas and may benefit from geological surveys"
+                })
+            
+            summary["recommendations"].append({
+                "priority": "general",
+                "action": "Regulatory Consultation",
+                "description": "Consult with Puerto Rico Planning Board regarding karst area regulations and requirements"
+            })
+        else:
+            summary["regulatory_summary"] = {
+                "regulation_applicable": "None",
+                "environmental_assessment_required": False,
+                "special_permits_may_be_required": False,
+                "geological_studies_recommended": False
+            }
+            
+            summary["recommendations"] = [{
+                "priority": "low",
+                "action": "Standard Development Process",
+                "description": "No special karst-related considerations required for these cadastrals"
+            }]
+        
+        # Add overall message
+        if batch_stats['in_karst'] > 0:
+            summary["message"] = f"{batch_stats['in_karst']} cadastral(s) directly in PRAPEC karst area - high regulatory impact"
+        elif batch_stats['nearby_karst'] > 0:
+            summary["message"] = f"{batch_stats['nearby_karst']} cadastral(s) near PRAPEC karst area - moderate regulatory considerations"
+        else:
+            summary["message"] = "No cadastrals affected by PRAPEC karst regulations"
+        
+        # Add data source information
+        summary["data_source"] = {
+            "service": "MIPR Reglamentario_va2 MapServer",
+            "layer": "PRAPEC (Carso) - Layer 15",
+            "authority": "Puerto Rico Planning Board (Junta de Planificación)"
+        }
+        
+        return summary
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "cadastral_numbers": cadastral_numbers,
+            "query_time": datetime.now().isoformat()
+        }
+
+@tool("find_nearest_karst", args_schema=NearestKarstInput)
+def find_nearest_karst(
+    cadastral_number: str,
+    max_search_miles: Optional[float] = 5.0
+) -> Dict[str, Any]:
+    """
+    Find the nearest PRAPEC karst area to a cadastral number.
+    
+    This tool identifies the nearest PRAPEC karst area to a given cadastral parcel,
+    providing distance analysis and directional information. Useful for understanding
+    karst proximity even when not directly affected.
+    
+    Args:
+        cadastral_number: The cadastral number to analyze
+        max_search_miles: Maximum search distance in miles (default: 5.0)
+        
+    Returns:
+        Dictionary containing:
+        - nearest_karst_found: Whether karst was found within search radius
+        - distance_analysis: Distance and direction to nearest karst
+        - cadastral_location: Property location details
+        - karst_details: Information about the nearest karst area
+        - proximity_assessment: Risk and regulatory assessment
+    """
+    
+    print(f"🔍 Finding nearest PRAPEC karst area to cadastral {cadastral_number}...")
+    
+    try:
+        # Initialize services
+        checker = PrapecKarstChecker()
+        cadastral_search = MIPRCadastralSearch()
+        
+        # First get cadastral information and location
+        cadastral_result = cadastral_search.search_by_cadastral(
+            cadastral_number, exact_match=True, include_geometry=False
+        )
+        
+        if not cadastral_result['success'] or cadastral_result['feature_count'] == 0:
+            return {
+                "success": False,
+                "error": f"Cadastral {cadastral_number} not found",
+                "cadastral_number": cadastral_number,
+                "query_time": datetime.now().isoformat()
+            }
+        
+        cadastral_info = cadastral_result['results'][0]
+        
+        # Progressive search for nearest karst area
+        search_distances = [0.5, 1.0, 2.0, 3.0, 5.0]
+        if max_search_miles not in search_distances:
+            search_distances.append(max_search_miles)
+            search_distances.sort()
+        
+        nearest_karst_distance = None
+        karst_found = False
+        
+        for distance in search_distances:
+            if distance > max_search_miles:
+                break
+                
+            result = checker.check_cadastral(
+                cadastral_number=cadastral_number,
+                buffer_miles=distance,
+                include_buffer_search=True
+            )
+            
+            if result['success'] and (result['in_karst'] or result['karst_proximity'] == 'nearby'):
+                nearest_karst_distance = distance
+                karst_found = True
+                karst_info = result.get('karst_info')
+                break
+        
+        # Prepare response
+        summary = {
+            "success": True,
+            "cadastral_number": cadastral_number,
+            "query_time": datetime.now().isoformat(),
+            "max_search_miles": max_search_miles
+        }
+        
+        # Cadastral location details
+        summary["cadastral_location"] = {
+            "municipality": cadastral_info['municipality'],
+            "neighborhood": cadastral_info.get('neighborhood', 'N/A'),
+            "region": cadastral_info.get('region', 'N/A'),
+            "classification": f"{cadastral_info['classification_code']} - {cadastral_info['classification_description']}",
+            "area_hectares": cadastral_info['area_m2'] / 10000
+        }
+        
+        if karst_found:
+            summary["nearest_karst_found"] = True
+            summary["distance_analysis"] = {
+                "distance_miles": nearest_karst_distance,
+                "distance_category": _categorize_distance(nearest_karst_distance),
+                "search_method": "Progressive buffer search"
+            }
+            
+            if karst_info:
+                summary["karst_details"] = {
+                    "official_name": karst_info['nombre'],
+                    "regulation_number": karst_info['regla'],
+                    "total_area_hectares": karst_info['area_hectares'],
+                    "description": karst_info['description']
+                }
+            
+            # Proximity assessment
+            summary["proximity_assessment"] = _assess_karst_proximity(nearest_karst_distance)
+            
+            summary["message"] = f"Nearest PRAPEC karst area found at {nearest_karst_distance} miles - {summary['proximity_assessment']['risk_level']} impact"
+            
+        else:
+            summary["nearest_karst_found"] = False
+            summary["distance_analysis"] = {
+                "distance_miles": f"> {max_search_miles}",
+                "distance_category": "distant",
+                "search_method": "Progressive buffer search"
+            }
+            
+            summary["proximity_assessment"] = {
+                "risk_level": "none",
+                "regulatory_impact": "none",
+                "environmental_considerations": "No special karst considerations required",
+                "development_implications": "Standard development process applicable"
+            }
+            
+            summary["message"] = f"No PRAPEC karst area found within {max_search_miles} miles - no karst-related considerations"
+        
+        # Add data source information
+        summary["data_source"] = {
+            "service": "MIPR Reglamentario_va2 MapServer",
+            "layer": "PRAPEC (Carso) - Layer 15",
+            "authority": "Puerto Rico Planning Board (Junta de Planificación)"
+        }
+        
+        return summary
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "cadastral_number": cadastral_number,
+            "query_time": datetime.now().isoformat()
+        }
+
+@tool("analyze_cadastral_karst_proximity", args_schema=KarstProximityAnalysisInput)
+def analyze_cadastral_karst_proximity(
+    cadastral_numbers: List[str],
+    analysis_radius_miles: Optional[float] = 2.0
+) -> Dict[str, Any]:
+    """
+    Perform comprehensive karst proximity analysis for multiple cadastrals.
+    
+    This tool provides detailed analysis of how multiple cadastral parcels relate
+    to PRAPEC karst areas, including spatial clustering, risk assessment, and
+    development planning recommendations.
+    
+    Args:
+        cadastral_numbers: List of cadastral numbers for analysis
+        analysis_radius_miles: Analysis radius in miles (default: 2.0)
+        
+    Returns:
+        Dictionary containing:
+        - spatial_analysis: Clustering and distribution analysis
+        - risk_assessment: Comprehensive risk evaluation
+        - development_planning: Planning recommendations
+        - regulatory_framework: Applicable regulations and requirements
+        - mitigation_strategies: Risk mitigation recommendations
+    """
+    
+    print(f"📊 Performing comprehensive karst proximity analysis for {len(cadastral_numbers)} cadastrals...")
+    
+    try:
+        # Initialize services
+        checker = PrapecKarstChecker()
+        
+        # Perform detailed analysis for each cadastral
+        detailed_results = []
+        spatial_data = []
+        
+        for cadastral in cadastral_numbers:
+            # Check at multiple distances for detailed analysis
+            distances = [0, 0.25, 0.5, 1.0, analysis_radius_miles]
+            cadastral_analysis = {
+                "cadastral_number": cadastral,
+                "distance_profile": {},
+                "risk_factors": []
+            }
+            
+            for distance in distances:
+                result = checker.check_cadastral(
+                    cadastral_number=cadastral,
+                    buffer_miles=distance,
+                    include_buffer_search=distance > 0
+                )
+                
+                if result['success']:
+                    status = "direct" if result['in_karst'] else "nearby" if result['karst_proximity'] == 'nearby' else "none"
+                    cadastral_analysis["distance_profile"][f"{distance}_miles"] = status
+                    
+                    if distance == 0 and result['in_karst']:
+                        cadastral_analysis["risk_factors"].append("direct_intersection")
+                    elif distance <= 0.5 and result['karst_proximity'] == 'nearby':
+                        cadastral_analysis["risk_factors"].append("immediate_proximity")
+                    elif distance <= 1.0 and result['karst_proximity'] == 'nearby':
+                        cadastral_analysis["risk_factors"].append("close_proximity")
+                    
+                    # Store cadastral info on first successful result
+                    if distance == 0 and result.get('cadastral_info'):
+                        cadastral_analysis["property_info"] = result['cadastral_info']
+            
+            detailed_results.append(cadastral_analysis)
+        
+        # Spatial clustering analysis
+        direct_intersection = [r for r in detailed_results if "direct_intersection" in r["risk_factors"]]
+        immediate_proximity = [r for r in detailed_results if "immediate_proximity" in r["risk_factors"]]
+        close_proximity = [r for r in detailed_results if "close_proximity" in r["risk_factors"]]
+        no_impact = [r for r in detailed_results if not r["risk_factors"]]
+        
+        # Prepare comprehensive summary
+        summary = {
+            "success": True,
+            "total_cadastrals": len(cadastral_numbers),
+            "analysis_radius_miles": analysis_radius_miles,
+            "query_time": datetime.now().isoformat()
+        }
+        
+        # Spatial analysis
+        summary["spatial_analysis"] = {
+            "direct_karst_intersection": {
+                "count": len(direct_intersection),
+                "percentage": (len(direct_intersection) / len(cadastral_numbers)) * 100,
+                "cadastrals": [r["cadastral_number"] for r in direct_intersection]
+            },
+            "immediate_proximity": {
+                "count": len(immediate_proximity),
+                "percentage": (len(immediate_proximity) / len(cadastral_numbers)) * 100,
+                "cadastrals": [r["cadastral_number"] for r in immediate_proximity]
+            },
+            "close_proximity": {
+                "count": len(close_proximity),
+                "percentage": (len(close_proximity) / len(cadastral_numbers)) * 100,
+                "cadastrals": [r["cadastral_number"] for r in close_proximity]
+            },
+            "no_karst_impact": {
+                "count": len(no_impact),
+                "percentage": (len(no_impact) / len(cadastral_numbers)) * 100,
+                "cadastrals": [r["cadastral_number"] for r in no_impact]
+            }
+        }
+        
+        # Risk assessment
+        high_risk_count = len(direct_intersection)
+        moderate_risk_count = len(immediate_proximity) + len(close_proximity)
+        low_risk_count = len(no_impact)
+        
+        summary["risk_assessment"] = {
+            "overall_risk_level": _determine_overall_risk(high_risk_count, moderate_risk_count, low_risk_count, len(cadastral_numbers)),
+            "high_risk_cadastrals": high_risk_count,
+            "moderate_risk_cadastrals": moderate_risk_count,
+            "low_risk_cadastrals": low_risk_count,
+            "risk_distribution": {
+                "high_risk_percentage": (high_risk_count / len(cadastral_numbers)) * 100,
+                "moderate_risk_percentage": (moderate_risk_count / len(cadastral_numbers)) * 100,
+                "low_risk_percentage": (low_risk_count / len(cadastral_numbers)) * 100
+            }
+        }
+        
+        # Development planning recommendations
+        summary["development_planning"] = _generate_development_recommendations(
+            high_risk_count, moderate_risk_count, low_risk_count, len(cadastral_numbers)
+        )
+        
+        # Regulatory framework
+        if high_risk_count > 0 or moderate_risk_count > 0:
+            summary["regulatory_framework"] = {
+                "primary_regulation": "Regulation 259 - PRAPEC",
+                "environmental_assessment_required": high_risk_count > 0,
+                "geological_studies_recommended": (high_risk_count + moderate_risk_count) > 0,
+                "special_permits_may_be_required": high_risk_count > 0,
+                "consultation_required": "Puerto Rico Planning Board",
+                "additional_considerations": [
+                    "Environmental Impact Assessment for direct intersections",
+                    "Geological surveys for proximity areas",
+                    "Karst-specific engineering considerations",
+                    "Groundwater protection measures"
+                ]
+            }
+        else:
+            summary["regulatory_framework"] = {
+                "primary_regulation": "Standard development regulations apply",
+                "environmental_assessment_required": False,
+                "geological_studies_recommended": False,
+                "special_permits_may_be_required": False,
+                "consultation_required": "Standard permitting process"
+            }
+        
+        # Mitigation strategies
+        summary["mitigation_strategies"] = _generate_mitigation_strategies(high_risk_count, moderate_risk_count)
+        
+        # Individual cadastral details
+        summary["detailed_results"] = detailed_results
+        
+        # Overall message
+        total_affected = high_risk_count + moderate_risk_count
+        if total_affected > 0:
+            summary["message"] = f"{total_affected} of {len(cadastral_numbers)} cadastrals affected by PRAPEC karst areas - comprehensive planning required"
+        else:
+            summary["message"] = f"No cadastrals affected by PRAPEC karst areas - standard development process applicable"
+        
+        # Add data source information
+        summary["data_source"] = {
+            "service": "MIPR Reglamentario_va2 MapServer",
+            "layer": "PRAPEC (Carso) - Layer 15",
+            "authority": "Puerto Rico Planning Board (Junta de Planificación)"
+        }
+        
+        return summary
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "cadastral_numbers": cadastral_numbers,
+            "query_time": datetime.now().isoformat()
+        }
+
+# Helper functions
+def _categorize_distance(distance_miles: float) -> str:
+    """Categorize distance to karst area."""
+    if distance_miles == 0:
+        return "direct_intersection"
+    elif distance_miles <= 0.5:
+        return "immediate_proximity"
+    elif distance_miles <= 1.0:
+        return "close_proximity"
+    elif distance_miles <= 2.0:
+        return "moderate_proximity"
+    else:
+        return "distant"
+
+def _assess_karst_proximity(distance_miles: float) -> Dict[str, str]:
+    """Assess proximity impact and risk level."""
+    if distance_miles == 0:
+        return {
+            "risk_level": "high",
+            "regulatory_impact": "high",
+            "environmental_considerations": "Comprehensive environmental impact assessment required",
+            "development_implications": "Special karst-specific engineering and environmental measures required"
+        }
+    elif distance_miles <= 0.5:
+        return {
+            "risk_level": "moderate-high",
+            "regulatory_impact": "moderate",
+            "environmental_considerations": "Geological survey and karst assessment recommended",
+            "development_implications": "Consider karst-specific design and construction practices"
+        }
+    elif distance_miles <= 1.0:
+        return {
+            "risk_level": "moderate",
+            "regulatory_impact": "low-moderate",
+            "environmental_considerations": "Basic geological assessment recommended",
+            "development_implications": "Standard development with karst awareness"
+        }
+    else:
+        return {
+            "risk_level": "low",
+            "regulatory_impact": "minimal",
+            "environmental_considerations": "Standard environmental considerations",
+            "development_implications": "Standard development process"
+        }
+
+def _determine_overall_risk(high_risk: int, moderate_risk: int, low_risk: int, total: int) -> str:
+    """Determine overall risk level for a group of cadastrals."""
+    high_percentage = (high_risk / total) * 100
+    moderate_percentage = (moderate_risk / total) * 100
+    
+    if high_percentage > 50:
+        return "high"
+    elif high_percentage > 25 or moderate_percentage > 50:
+        return "moderate-high"
+    elif moderate_percentage > 25:
+        return "moderate"
+    elif moderate_percentage > 0 or high_percentage > 0:
+        return "low-moderate"
+    else:
+        return "low"
+
+def _generate_development_recommendations(high_risk: int, moderate_risk: int, low_risk: int, total: int) -> Dict[str, Any]:
+    """Generate development planning recommendations."""
+    recommendations = {
+        "phased_approach_recommended": (high_risk + moderate_risk) > (total * 0.3),
+        "priority_areas": [],
+        "planning_considerations": [],
+        "timeline_implications": "standard"
+    }
+    
+    if high_risk > 0:
+        recommendations["priority_areas"].append({
+            "priority": "immediate",
+            "action": "Environmental Impact Assessment",
+            "cadastral_count": high_risk,
+            "description": "Require comprehensive environmental and geological assessment before development"
+        })
+        recommendations["planning_considerations"].append("Karst-specific engineering design required")
+        recommendations["timeline_implications"] = "extended"
+    
+    if moderate_risk > 0:
+        recommendations["priority_areas"].append({
+            "priority": "high",
+            "action": "Geological Survey",
+            "cadastral_count": moderate_risk,
+            "description": "Conduct geological surveys to assess karst influence"
+        })
+        recommendations["planning_considerations"].append("Consider karst-aware development practices")
+        if recommendations["timeline_implications"] == "standard":
+            recommendations["timeline_implications"] = "moderate"
+    
+    if low_risk > 0:
+        recommendations["priority_areas"].append({
+            "priority": "standard",
+            "action": "Standard Development",
+            "cadastral_count": low_risk,
+            "description": "Proceed with standard development process"
+        })
+    
+    return recommendations
+
+def _generate_mitigation_strategies(high_risk: int, moderate_risk: int) -> List[Dict[str, str]]:
+    """Generate risk mitigation strategies."""
+    strategies = []
+    
+    if high_risk > 0:
+        strategies.extend([
+            {
+                "strategy": "Environmental Impact Assessment",
+                "description": "Comprehensive assessment of karst environmental impacts",
+                "applicability": "Direct karst intersection areas"
+            },
+            {
+                "strategy": "Karst-Specific Engineering",
+                "description": "Specialized foundation and drainage design for karst terrain",
+                "applicability": "Direct karst intersection areas"
+            },
+            {
+                "strategy": "Groundwater Protection",
+                "description": "Implement measures to protect karst groundwater systems",
+                "applicability": "Direct karst intersection areas"
+            }
+        ])
+    
+    if moderate_risk > 0:
+        strategies.extend([
+            {
+                "strategy": "Geological Survey",
+                "description": "Detailed geological assessment to understand karst influence",
+                "applicability": "Karst proximity areas"
+            },
+            {
+                "strategy": "Monitoring Program",
+                "description": "Establish monitoring for potential karst-related impacts",
+                "applicability": "Karst proximity areas"
+            }
+        ])
+    
+    if not strategies:
+        strategies.append({
+            "strategy": "Standard Development Practices",
+            "description": "No special karst-related mitigation required",
+            "applicability": "All areas"
+        })
+    
+    return strategies
+
+# Tool list for easy import
+KARST_TOOLS = [
+    check_cadastral_karst,
+    check_multiple_cadastrals_karst,
+    find_nearest_karst,
+    analyze_cadastral_karst_proximity
+]
+
+def get_karst_tool_descriptions() -> Dict[str, str]:
+    """Get descriptions of all available karst tools"""
+    return {
+        "check_cadastral_karst": "Check if a single cadastral number falls within PRAPEC karst areas - provides regulatory and environmental analysis",
+        "check_multiple_cadastrals_karst": "Check multiple cadastrals for PRAPEC karst areas - includes batch analysis and recommendations",
+        "find_nearest_karst": "Find the nearest PRAPEC karst area to a cadastral number - useful for proximity assessment",
+        "analyze_cadastral_karst_proximity": "Comprehensive karst proximity analysis for multiple cadastrals - includes risk assessment and planning recommendations"
+    }
+
+if __name__ == "__main__":
+    print("🏔️ MIPR Karst Tools for LangGraph")
+    print("=" * 50)
+    print("Available tools:")
+    
+    descriptions = get_karst_tool_descriptions()
+    for tool_name, description in descriptions.items():
+        print(f"\n📋 {tool_name}:")
+        print(f"   {description}")
+    
+    print(f"\n💡 Usage:")
+    print(f"   from mipr.karst.karst_tools import KARST_TOOLS")
+    print(f"   # Use with LangGraph agents or ToolNode")
+    print(f"   # All tools accept cadastral numbers as primary input")
+    print(f"   # Tools provide comprehensive karst analysis and regulatory guidance")
+    print("=" * 50) 

@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+websockets
+python-multipart
+
+langchain-core
+langgraph
+langchain-google-genai
+requests
+aiofiles
+geopandas
+folium
+matplotlib
+reportlab
+Pillow
+PyPDF2

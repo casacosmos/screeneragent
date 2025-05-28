@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Environmental Screening Chat</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+            gap: 1rem;
+            padding: 1rem;
+            min-height: 0;
+        }
+
+        .chat-container {
+            flex: 3;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .sidebar {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            overflow-y: auto;
+            max-height: calc(100vh - 140px);
+        }
+
+        .chat-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e0e0e0;
+            background: #f8f9fa;
+            flex-shrink: 0;
+        }
+
+        .chat-header h2 {
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .chat-header p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            min-height: 0;
+        }
+
+        .message {
+            max-width: 85%;
+            padding: 1.2rem;
+            border-radius: 15px;
+            word-wrap: break-word;
+            animation: fadeIn 0.3s ease-in;
+            line-height: 1.6;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.agent {
+            align-self: flex-start;
+            background: #f8f9fa;
+            color: #333;
+            border: 1px solid #e0e0e0;
+        }
+
+        .message.status {
+            align-self: center;
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+            font-style: italic;
+            text-align: center;
+            max-width: 60%;
+        }
+
+        .message.error {
+            align-self: center;
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            max-width: 70%;
+        }
+
+        .message-content {
+            margin-bottom: 0.5rem;
+        }
+
+        .message-content h1, .message-content h2, .message-content h3 {
+            margin: 1rem 0 0.5rem 0;
+            color: inherit;
+        }
+
+        .message-content h1 { font-size: 1.3rem; }
+        .message-content h2 { font-size: 1.2rem; }
+        .message-content h3 { font-size: 1.1rem; }
+
+        .message-content ul, .message-content ol {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+        }
+
+        .message-content li {
+            margin: 0.25rem 0;
+        }
+
+        .message-content p {
+            margin: 0.5rem 0;
+        }
+
+        .message-content code {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .message-content pre {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 0.5rem 0;
+        }
+
+        .message-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .message-content blockquote {
+            border-left: 4px solid #667eea;
+            padding-left: 1rem;
+            margin: 0.5rem 0;
+            font-style: italic;
+            opacity: 0.8;
+        }
+
+        .message-content a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .message-content a:hover {
+            text-decoration: underline;
+        }
+
+        .message-content strong {
+            font-weight: 600;
+        }
+
+        .message-content em {
+            font-style: italic;
+        }
+
+        .message-time {
+            font-size: 0.8rem;
+            opacity: 0.7;
+            margin-top: 0.5rem;
+        }
+
+        .chat-input-container {
+            padding: 1.5rem;
+            border-top: 1px solid #e0e0e0;
+            background: #f8f9fa;
+            flex-shrink: 0;
+        }
+
+        .chat-input-form {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+
+        .input-group {
+            flex: 1;
+            position: relative;
+        }
+
+        .chat-input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1rem;
+            resize: none;
+            min-height: 50px;
+            max-height: 150px;
+            transition: border-color 0.3s ease;
+            font-family: inherit;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .send-button:hover:not(:disabled) {
+            transform: scale(1.05);
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .examples-section h3,
+        .files-section h3 {
+            color: #333;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .example-item {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 0.5rem;
+        }
+
+        .example-item:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .example-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .example-description {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .file-item {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 0.25rem;
+        }
+
+        .file-meta {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .file-action {
+            background: none;
+            border: none;
+            color: #667eea;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: background-color 0.2s ease;
+        }
+
+        .file-action:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .connection-status {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #d4edda;
+            color: #155724;
+        }
+
+        @media (max-width: 1024px) {
+            .main-container {
+                flex-direction: column;
+                padding: 0.5rem;
+            }
+
+            .sidebar {
+                order: -1;
+                flex: none;
+                max-height: 250px;
+                overflow-y: auto;
+            }
+
+            .chat-container {
+                flex: 1;
+                min-height: 500px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 1.2rem;
+            }
+
+            .message {
+                max-width: 95%;
+            }
+
+            .chat-messages {
+                padding: 1rem;
+            }
+
+            .chat-input-container {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <i class="fas fa-leaf"></i>
+            Environmental Screening Chat
+        </h1>
+        <div class="connection-status" id="connectionStatus">
+            <div class="status-indicator"></div>
+            <span>HTTP API Ready</span>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="chat-container">
+            <div class="chat-header">
+                <h2>Environmental Screening Assistant</h2>
+                <p>Ask me to perform comprehensive environmental screening including flood and wetland analysis. I can generate all reports and provide detailed environmental assessments with markdown formatting support.</p>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="message agent">
+                    <div class="message-content">
+                        <p>👋 <strong>Hello!</strong> I'm your comprehensive environmental screening assistant. I can help you with:</p>
+                        
+                        <h3>🌊 Flood Analysis</h3>
+                        <ul>
+                            <li>Generate FEMA reports (FIRMette, Preliminary Comparison, ABFE)</li>
+                            <li>Extract flood zones, elevations, and panel details</li>
+                            <li>Flood insurance requirements and risk assessment</li>
+                        </ul>
+                        
+                        <h3>🌿 Wetland Analysis</h3>
+                        <ul>
+                            <li>Determine wetland presence and proximity</li>
+                            <li>Generate adaptive wetland maps</li>
+                            <li>NWI classifications and regulatory guidance</li>
+                        </ul>
+                        
+                        <h3>📋 Environmental Screening</h3>
+                        <p>Combined analysis with all reports and comprehensive assessment</p>
+                        
+                        <p><strong>Just provide coordinates and specify what type of analysis you need!</strong></p>
+                    </div>
+                    <div class="message-time">System</div>
+                </div>
+            </div>
+
+            <div class="chat-input-container">
+                <form class="chat-input-form" id="chatForm">
+                    <div class="input-group">
+                        <textarea 
+                            class="chat-input" 
+                            id="messageInput" 
+                            placeholder="Ask for environmental screening (e.g., 'Generate environmental screening report for Miami, Florida coordinates -80.1918, 25.7617')"
+                            rows="1"
+                        ></textarea>
+                    </div>
+                    <button type="submit" class="send-button" id="sendButton">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="examples-section">
+                <h3><i class="fas fa-lightbulb"></i> Example Queries</h3>
+                <div id="examplesList">
+                    <!-- Examples will be loaded here -->
+                </div>
+            </div>
+
+            <div class="files-section">
+                <h3><i class="fas fa-file-pdf"></i> Generated Reports & Maps</h3>
+                <div id="filesList">
+                    <!-- Files will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class EnvironmentalScreeningChat {
+            constructor() {
+                this.messageInput = document.getElementById('messageInput');
+                this.chatMessages = document.getElementById('chatMessages');
+                this.chatForm = document.getElementById('chatForm');
+                this.sendButton = document.getElementById('sendButton');
+                this.connectionStatus = document.getElementById('connectionStatus');
+                
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.loadExamples();
+                this.loadFiles();
+                
+                // Auto-resize textarea
+                this.messageInput.addEventListener('input', this.autoResize.bind(this));
+                
+                // Set up periodic file refresh
+                setInterval(() => this.loadFiles(), 10000); // Refresh every 10 seconds
+            }
+
+            setupEventListeners() {
+                this.chatForm.addEventListener('submit', this.sendMessage.bind(this));
+                
+                // Enter to send, Shift+Enter for new line
+                this.messageInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage(e);
+                    }
+                });
+            }
+
+            async sendMessage(e) {
+                e.preventDefault();
+                
+                const message = this.messageInput.value.trim();
+                if (!message) return;
+                
+                // Add user message to chat
+                this.addMessage(message, 'user');
+                
+                // Clear input
+                this.messageInput.value = '';
+                this.autoResize();
+                
+                // Disable send button and show loading
+                this.setSendButtonState(true);
+                
+                // Add status message
+                this.addMessage('Processing your environmental screening request...', 'status');
+                
+                try {
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            message: message,
+                            timestamp: new Date().toISOString()
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    // Remove status message
+                    this.removeLastStatusMessage();
+                    
+                    if (response.ok) {
+                        this.addMessage(data.response, 'agent', data.timestamp);
+                        if (data.generated_files && data.generated_files.length > 0) {
+                            this.loadFiles();
+                        }
+                    } else {
+                        this.addMessage(`Error: ${data.detail}`, 'error');
+                    }
+                } catch (error) {
+                    this.removeLastStatusMessage();
+                    this.addMessage(`Network error: ${error.message}`, 'error');
+                }
+                
+                this.setSendButtonState(false);
+            }
+
+            addMessage(content, type, timestamp = null) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${type}`;
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content';
+                
+                if (type === 'agent') {
+                    // Parse markdown for agent messages
+                    contentDiv.innerHTML = marked.parse(content);
+                } else {
+                    // For user messages, just format basic elements
+                    contentDiv.innerHTML = this.formatMessage(content);
+                }
+                
+                messageDiv.appendChild(contentDiv);
+                
+                if (timestamp || type === 'user') {
+                    const timeDiv = document.createElement('div');
+                    timeDiv.className = 'message-time';
+                    timeDiv.textContent = timestamp ? 
+                        new Date(timestamp).toLocaleTimeString() : 
+                        new Date().toLocaleTimeString();
+                    messageDiv.appendChild(timeDiv);
+                }
+                
+                this.chatMessages.appendChild(messageDiv);
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+
+            removeLastStatusMessage() {
+                const messages = this.chatMessages.querySelectorAll('.message.status');
+                if (messages.length > 0) {
+                    const lastStatus = messages[messages.length - 1];
+                    lastStatus.remove();
+                }
+            }
+
+            formatMessage(content) {
+                // Convert URLs to links
+                const urlRegex = /(https?:\/\/[^\s]+)/g;
+                content = content.replace(urlRegex, '<a href="$1" target="_blank">$1</a>');
+                
+                // Convert newlines to <br>
+                content = content.replace(/\n/g, '<br>');
+                
+                return content;
+            }
+
+            setSendButtonState(loading) {
+                if (loading) {
+                    this.sendButton.disabled = true;
+                    this.sendButton.innerHTML = '<div class="loading"></div>';
+                } else {
+                    this.sendButton.disabled = false;
+                    this.sendButton.innerHTML = '<i class="fas fa-paper-plane"></i>';
+                }
+            }
+
+            autoResize() {
+                this.messageInput.style.height = 'auto';
+                this.messageInput.style.height = Math.min(this.messageInput.scrollHeight, 150) + 'px';
+            }
+
+            async loadExamples() {
+                try {
+                    const response = await fetch('/examples');
+                    const data = await response.json();
+                    
+                    const examplesList = document.getElementById('examplesList');
+                    examplesList.innerHTML = '';
+                    
+                    data.examples.forEach(example => {
+                        const exampleDiv = document.createElement('div');
+                        exampleDiv.className = 'example-item';
+                        exampleDiv.innerHTML = `
+                            <div class="example-title">${example.title}</div>
+                            <div class="example-description">${example.description}</div>
+                        `;
+                        
+                        exampleDiv.addEventListener('click', () => {
+                            this.messageInput.value = example.query;
+                            this.autoResize();
+                            this.messageInput.focus();
+                        });
+                        
+                        examplesList.appendChild(exampleDiv);
+                    });
+                } catch (error) {
+                    console.error('Error loading examples:', error);
+                }
+            }
+
+            async loadFiles() {
+                try {
+                    const response = await fetch('/files');
+                    const data = await response.json();
+                    
+                    const filesList = document.getElementById('filesList');
+                    filesList.innerHTML = '';
+                    
+                    if (data.files.length === 0) {
+                        filesList.innerHTML = '<p style="color: #666; font-style: italic;">No files generated yet</p>';
+                        return;
+                    }
+                    
+                    data.files.forEach(file => {
+                        const fileDiv = document.createElement('div');
+                        fileDiv.className = 'file-item';
+                        
+                        const sizeKB = Math.round(file.size / 1024);
+                        const modifiedDate = new Date(file.modified).toLocaleDateString();
+                        
+                        fileDiv.innerHTML = `
+                            <div class="file-info">
+                                <div class="file-name">${file.name}</div>
+                                <div class="file-meta">${sizeKB} KB • ${modifiedDate}</div>
+                            </div>
+                            <div class="file-actions">
+                                <button class="file-action" onclick="window.open('/files/${file.name}', '_blank')" title="Download">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                <button class="file-action" onclick="chat.deleteFile('${file.name}')" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        `;
+                        
+                        filesList.appendChild(fileDiv);
+                    });
+                } catch (error) {
+                    console.error('Error loading files:', error);
+                }
+            }
+
+            async deleteFile(filename) {
+                if (!confirm(`Are you sure you want to delete ${filename}?`)) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/files/${filename}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        this.loadFiles();
+                        this.addMessage(`File ${filename} deleted successfully`, 'status');
+                    } else {
+                        const data = await response.json();
+                        this.addMessage(`Error deleting file: ${data.detail}`, 'error');
+                    }
+                } catch (error) {
+                    this.addMessage(`Error deleting file: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        // Initialize the chat application
+        const chat = new EnvironmentalScreeningChat();
+    </script>
+</body>
+</html> 
