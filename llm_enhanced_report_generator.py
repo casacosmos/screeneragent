@@ -311,6 +311,7 @@ Be conservative in your assumptions and clearly flag areas needing additional in
                 "complexity_score": risk.complexity_score,
                 "overall_risk_profile": risk.risk_level + " - " + risk.reasoning[:100] + "...",
                 "development_feasibility": risk.development_feasibility,
+                "integrated_assessment": f"AI-enhanced analysis identified {len(risk.key_risk_factors)} primary environmental risk factors with a complexity score of {risk.complexity_score}.",
                 "enhanced_assessment": True,
                 "llm_reasoning": risk.reasoning
             }
