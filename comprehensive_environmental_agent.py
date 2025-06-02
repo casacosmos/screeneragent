@@ -37,8 +37,7 @@ from comprehensive_screening_report_tool import COMPREHENSIVE_SCREENING_TOOLS
 from output_directory_manager import get_output_manager, create_screening_directory, PROJECT_DIRECTORY_TOOLS
 
 # Add karst tools
-sys.path.append(os.path.join(os.path.dirname(__file__), 'karst'))
-from karst_tools import KARST_TOOLS
+from karst.karst_tools import KARST_TOOLS
 
 # Add habitat tools
 sys.path.append(os.path.join(os.path.dirname(__file__), 'HabitatINFO'))

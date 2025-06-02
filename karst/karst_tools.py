@@ -24,9 +24,10 @@ from pydantic import BaseModel, Field
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 from langchain_core.tools import tool
-from prapec_karst_checker import PrapecKarstChecker
+from karst.prapec_karst_checker import PrapecKarstChecker
 from cadastral.cadastral_search import MIPRCadastralSearch
 from output_directory_manager import get_output_manager
+from karst.karst_map_generator import KarstMapGenerator
 
 # Pydantic models for tool input schemas
 class SingleCadastralKarstInput(BaseModel):
@@ -50,6 +51,13 @@ class KarstProximityAnalysisInput(BaseModel):
     """Input schema for comprehensive karst proximity analysis"""
     cadastral_numbers: List[str] = Field(description="List of cadastral numbers for comprehensive karst analysis")
     analysis_radius_miles: Optional[float] = Field(default=2.0, description="Analysis radius in miles (default: 2.0)")
+
+class KarstMapInput(BaseModel):
+    """Input schema for karst map generation"""
+    longitude: float = Field(description="Longitude coordinate (decimal degrees)")
+    latitude: float = Field(description="Latitude coordinate (decimal degrees)")
+    location_name: Optional[str] = Field(default=None, description="Optional descriptive name for the location")
+    buffer_miles: Optional[float] = Field(default=1.0, description="Buffer radius for map in miles (default: 1.0)")
 
 @tool("check_cadastral_karst", args_schema=SingleCadastralKarstInput)
 def check_cadastral_karst(
@@ -906,6 +914,140 @@ def analyze_cadastral_karst_proximity(
         print(f"❌ Error during comprehensive karst proximity analysis: {str(e)}")
         return error_result
 
+@tool("generate_karst_analysis_map", args_schema=KarstMapInput)
+def generate_karst_analysis_map(
+    longitude: float, 
+    latitude: float,
+    location_name: Optional[str] = None,
+    buffer_miles: Optional[float] = 1.0
+) -> Dict[str, Any]:
+    """
+    Generate a comprehensive karst analysis map for Puerto Rico locations.
+    
+    This tool generates a detailed map showing PRAPEC karst areas and regulatory zones
+    around the specified coordinates. The map includes:
+    - PRAPEC karst areas (Layer 15) - Overall karst zone
+    - APE-ZC zones - Special karst protection zones (red)
+    - ZA zones - 50-meter buffer zones (blue)
+    - Location marker
+    
+    The map is saved to the project maps directory for inclusion in comprehensive reports.
+    
+    Args:
+        longitude: Longitude coordinate (negative for western hemisphere)
+        latitude: Latitude coordinate (positive for northern hemisphere)
+        location_name: Optional descriptive name for the location
+        buffer_miles: Buffer radius for map in miles (default: 1.0)
+        
+    Returns:
+        Dictionary containing:
+        - success: Whether map generation was successful
+        - map_file: Path to generated map file
+        - map_details: Information about map features and coverage
+        - project_directory: Output directory information
+    """
+    
+    if location_name is None:
+        location_name = f"Karst Analysis at {latitude:.4f}, {longitude:.4f}"
+    
+    print(f"🗺️ Generating karst analysis map for {location_name}")
+    
+    # Get or create project directory
+    output_manager = get_output_manager()
+    if not output_manager.current_project_dir:
+        # Create project directory if not already created
+        project_dir = output_manager.create_project_directory(
+            location_name=location_name,
+            coordinates=(longitude, latitude)
+        )
+        print(f"📁 Created project directory: {project_dir}")
+    else:
+        project_dir = output_manager.current_project_dir
+        print(f"📁 Using existing project directory: {project_dir}")
+    
+    try:
+        # Get maps directory
+        maps_dir = output_manager.get_subdirectory("maps")
+        
+        # Initialize map generator
+        map_generator = KarstMapGenerator(output_directory=maps_dir)
+        
+        # Generate the map
+        map_path = map_generator.generate_map_export(
+            longitude=longitude,
+            latitude=latitude,
+            location_name=location_name,
+            buffer_miles=buffer_miles,
+            base_map_name="World_Topo_Map",
+            output_format="PDF",
+            layout_template="Letter ANSI A Landscape",
+            dpi=300,
+            output_filename_prefix="karst_analysis_map"
+        )
+        
+        if map_path:
+            # Calculate coverage area
+            import math
+            coverage_area = round(math.pi * (buffer_miles ** 2), 2)
+            
+            return {
+                "success": True,
+                "message": "Karst analysis map generated successfully",
+                "map_file": map_path,
+                "map_details": {
+                    "buffer_miles": buffer_miles,
+                    "coverage_area_sq_miles": coverage_area,
+                    "base_map": "World_Topo_Map",
+                    "format": "PDF",
+                    "resolution_dpi": 300,
+                    "layout": "Letter ANSI A Landscape"
+                },
+                "map_features": {
+                    "prapec_karst_areas": "Gold overlay showing overall PRAPEC karst zones",
+                    "ape_zc_zones": "Red overlay showing special karst protection zones (APE-ZC)",
+                    "za_buffer_zones": "Blue overlay showing 50-meter buffer zones (ZA)",
+                    "location_marker": "Green point marker at query location",
+                    "includes_legend": True,
+                    "includes_scale_bar": True
+                },
+                "regulatory_zones": {
+                    "prapec_overall": "PRAPEC karst regulation area (Regulation 259)",
+                    "ape_zc": "Special karst zone - strictest protection",
+                    "za": "50-meter buffer zone around karst features"
+                },
+                "project_directory": output_manager.get_project_info(),
+                "location": {
+                    "longitude": longitude,
+                    "latitude": latitude,
+                    "location_name": location_name
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Failed to generate karst analysis map",
+                "error": "Map generation service returned no file",
+                "location": {
+                    "longitude": longitude,
+                    "latitude": latitude,
+                    "location_name": location_name
+                },
+                "project_directory": output_manager.get_project_info()
+            }
+            
+    except Exception as e:
+        print(f"❌ Error generating karst map: {e}")
+        return {
+            "success": False,
+            "message": f"Error generating karst analysis map: {str(e)}",
+            "location": {
+                "longitude": longitude,
+                "latitude": latitude,
+                "location_name": location_name
+            },
+            "project_directory": output_manager.get_project_info()
+        }
+
 # Helper functions
 def _categorize_distance(distance_miles: float) -> str:
     """Categorize distance to karst area."""
@@ -1058,7 +1200,8 @@ KARST_TOOLS = [
     check_cadastral_karst,
     check_multiple_cadastrals_karst,
     find_nearest_karst,
-    analyze_cadastral_karst_proximity
+    analyze_cadastral_karst_proximity,
+    generate_karst_analysis_map
 ]
 
 def get_karst_tool_descriptions() -> Dict[str, str]:
@@ -1067,7 +1210,8 @@ def get_karst_tool_descriptions() -> Dict[str, str]:
         "check_cadastral_karst": "Check if a single cadastral number falls within PRAPEC karst areas - provides regulatory and environmental analysis",
         "check_multiple_cadastrals_karst": "Check multiple cadastrals for PRAPEC karst areas - includes batch analysis and recommendations",
         "find_nearest_karst": "Find the nearest PRAPEC karst area to a cadastral number - useful for proximity assessment",
-        "analyze_cadastral_karst_proximity": "Comprehensive karst proximity analysis for multiple cadastrals - includes risk assessment and planning recommendations"
+        "analyze_cadastral_karst_proximity": "Comprehensive karst proximity analysis for multiple cadastrals - includes risk assessment and planning recommendations",
+        "generate_karst_analysis_map": "Generate a comprehensive karst analysis map for Puerto Rico locations"
     }
 
 if __name__ == "__main__":

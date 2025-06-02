@@ -14,6 +14,7 @@ from typing import Dict, Any, List, Tuple, Optional
 from datetime import datetime
 import urllib3
 import time
+import sys
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -81,9 +82,29 @@ class KarstMapGenerator:
         if location_name is None:
             location_name = f"Karst Analysis at {latitude:.4f}, {longitude:.4f}"
 
-        print(f"\n🗺️  Generating karst map ({output_format}) for: {location_name}")
+        print(f"\n��️  Generating karst map ({output_format}) for: {location_name}")
         print(f"📍 Coordinates: ({longitude:.6f}, {latitude:.6f})")
         print(f"📏 Buffer: {buffer_miles} miles")
+
+        # Try to integrate with output directory manager like other tools
+        try:
+            # Import output directory manager
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from output_directory_manager import get_output_manager
+            
+            # Try to use output manager if available
+            output_manager = get_output_manager()
+            if output_manager.current_project_dir:
+                maps_dir = output_manager.get_subdirectory("maps")
+                print(f"📁 Using project maps directory: {maps_dir}")
+            else:
+                # Fallback to self.output_directory if no project is set up
+                maps_dir = self.output_directory
+                print(f"📁 Using fallback output directory: {maps_dir}")
+        except:
+            # If output manager fails, use the original self.output_directory
+            maps_dir = self.output_directory
+            print(f"📁 Using standalone output directory: {maps_dir}")
 
         extent = self._calculate_extent(longitude, latitude, buffer_miles)
         
@@ -251,7 +272,7 @@ class KarstMapGenerator:
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{output_filename_prefix}_{timestamp}.{output_format.lower()}"
-            filepath = os.path.join(self.output_directory, filename)
+            filepath = os.path.join(maps_dir, filename)
 
             with open(filepath, 'wb') as f:
                 f.write(map_content_response.content)
