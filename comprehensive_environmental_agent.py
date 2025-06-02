@@ -39,6 +39,7 @@ from output_directory_manager import get_output_manager, create_screening_direct
 # Add karst tools
 sys.path.append(os.path.join(os.path.dirname(__file__), 'karst'))
 from karst_tools import KARST_TOOLS
+from comprehensive_karst_analysis_tool import COMPREHENSIVE_KARST_TOOLS
 
 # Add habitat tools
 sys.path.append(os.path.join(os.path.dirname(__file__), 'HabitatINFO'))
@@ -61,7 +62,7 @@ def create_comprehensive_environmental_agent():
     model = "google_genai:gemini-2.5-flash-preview-04-17"
     memory = MemorySaver()
     # Combine all comprehensive tools including cadastral data tools, karst tools, habitat tools, nonattainment analysis, and PDF generation
-    all_tools = COMPREHENSIVE_FLOOD_TOOLS + COMPREHENSIVE_WETLAND_TOOL + CADASTRAL_DATA_TOOLS + KARST_TOOLS + habitat_tools + [COMPREHENSIVE_NONATTAINMENT_TOOL] + COMPREHENSIVE_SCREENING_TOOLS + PROJECT_DIRECTORY_TOOLS
+    all_tools = COMPREHENSIVE_FLOOD_TOOLS + COMPREHENSIVE_WETLAND_TOOL + CADASTRAL_DATA_TOOLS + KARST_TOOLS + COMPREHENSIVE_KARST_TOOLS + habitat_tools + [COMPREHENSIVE_NONATTAINMENT_TOOL] + COMPREHENSIVE_SCREENING_TOOLS + PROJECT_DIRECTORY_TOOLS
     
     # Create the agent with comprehensive environmental tools
     agent = create_react_agent(
@@ -126,7 +127,7 @@ Provide thorough environmental screening that integrates property characteristic
    
    Then execute ONCE per location:
    ✓ Property/Cadastral Analysis
-   ✓ Karst Analysis (Puerto Rico properties)
+   ✓ Karst Analysis (Puerto Rico properties) - USE analyze_cadastral_karst_with_map for COMPREHENSIVE analysis with map generation
    ✓ comprehensive_flood_analysis (ONCE ONLY - generates comprehensive report with all flood components)
    ✓ analyze_wetland_location_with_map
    ✓ generate_adaptive_critical_habitat_map
@@ -173,6 +174,7 @@ Provide thorough environmental screening that integrates property characteristic
 • check_multiple_cadastrals_karst: Batch analysis
 • find_nearest_karst: Proximity assessment
 • analyze_cadastral_karst_proximity: Comprehensive analysis
+• analyze_cadastral_karst_with_map: COMPREHENSIVE karst analysis with automatic map generation
 • PRAPEC compliance, geological significance, development restrictions
 
 🌊 FLOOD ANALYSIS

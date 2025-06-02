@@ -28,6 +28,12 @@ from .karst_tools import (
     get_karst_tool_descriptions
 )
 
+from .comprehensive_karst_analysis_tool import (
+    COMPREHENSIVE_KARST_TOOLS,
+    analyze_cadastral_karst_with_map,
+    get_comprehensive_karst_tool_description
+)
+
 __all__ = [
     # Core functionality
     'PrapecKarstChecker',
@@ -41,7 +47,12 @@ __all__ = [
     'check_multiple_cadastrals_karst',
     'find_nearest_karst',
     'analyze_cadastral_karst_proximity',
-    'get_karst_tool_descriptions'
+    'get_karst_tool_descriptions',
+
+    # Comprehensive Karst Analysis Tool
+    'COMPREHENSIVE_KARST_TOOLS',
+    'analyze_cadastral_karst_with_map',
+    'get_comprehensive_karst_tool_description'
 ]
 
 __version__ = '1.0.0'

@@ -18,16 +18,15 @@ import os
 import json
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, Field
+from pydantic.v1 import BaseModel, Field
 
 # Add parent directories to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 from langchain_core.tools import tool
-from prapec_karst_checker import PrapecKarstChecker
+from .prapec_karst_checker import PrapecKarstChecker
 from cadastral.cadastral_search import MIPRCadastralSearch
 from output_directory_manager import get_output_manager
-from karst_map_generator import KarstMapGenerator  # Add map generator import
 
 # Pydantic models for tool input schemas
 class SingleCadastralKarstInput(BaseModel):
@@ -183,32 +182,6 @@ def check_cadastral_karst(
             "authority": "Puerto Rico Planning Board (Junta de Planificación)"
         }
         
-        # Generate karst map if we have cadastral coordinates
-        map_result = {"success": False, "message": "No coordinates available for map generation"}
-        if result.get('cadastral_info') and result['cadastral_info'].get('center_coordinates'):
-            coords = result['cadastral_info']['center_coordinates']
-            longitude, latitude = coords
-            
-            # Create location name for map
-            cadastral_info = result['cadastral_info']
-            municipality = cadastral_info.get('municipality', 'Unknown')
-            location_name = f"{municipality}, Puerto Rico"
-            
-            print(f"🗺️  Generating karst map for cadastral {cadastral_number}...")
-            map_result = _generate_karst_map(
-                cadastral_number=cadastral_number,
-                longitude=longitude,
-                latitude=latitude,
-                location_name=location_name,
-                karst_status=summary["karst_status"],
-                output_manager=output_manager
-            )
-        else:
-            print(f"⚠️  Cannot generate map - no coordinates available for cadastral {cadastral_number}")
-        
-        # Add map generation result to summary
-        summary["map_generation"] = map_result
-        
         # Save detailed karst analysis data to project data directory
         data_dir = output_manager.get_subdirectory("data")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -228,6 +201,28 @@ def check_cadastral_karst(
             "processed_summary": summary
         }
         
+        # Generate karst map automatically
+        map_file = None
+        try:
+            print(f"🗺️ Generating karst map for cadastral {cadastral_number}...")
+            map_file = _generate_karst_map_for_cadastral(
+                cadastral_number=cadastral_number,
+                buffer_miles=buffer_miles,
+                output_manager=output_manager,
+                karst_result=result
+            )
+            if map_file:
+                print(f"🗺️ Karst map generated: {os.path.basename(map_file)}")
+                karst_data["files_generated"] = {"map_file": map_file}
+                summary["map_generated"] = True
+                summary["map_file"] = map_file
+            else:
+                print(f"⚠️ Karst map generation failed")
+                summary["map_generated"] = False
+        except Exception as e:
+            print(f"⚠️ Karst map generation error: {str(e)}")
+            summary["map_generated"] = False
+        
         with open(karst_data_file, 'w') as f:
             json.dump(karst_data, f, indent=2, default=str)
         print(f"💾 Karst analysis data saved to: {karst_data_file}")
@@ -235,16 +230,11 @@ def check_cadastral_karst(
         # Add project directory and files information
         summary["project_directory"] = output_manager.get_project_info()
         summary["files_generated"] = {
-            "karst_data_file": karst_data_file
+            "karst_data_file": karst_data_file,
+            "map_file": map_file
         }
         
-        # Add map file if generated successfully
-        if map_result.get("success") and map_result.get("filename"):
-            summary["files_generated"]["map_file"] = map_result["filename"]
-        
         print(f"✅ Karst analysis completed for cadastral {cadastral_number}")
-        if map_result.get("success"):
-            print(f"🗺️  Karst map generated: {os.path.basename(map_result['filename'])}")
         print(f"📁 All files saved to project directory: {project_dir}")
         
         return summary
@@ -1086,88 +1076,87 @@ def _generate_mitigation_strategies(high_risk: int, moderate_risk: int) -> List[
     
     return strategies
 
-def _generate_karst_map(cadastral_number: str, longitude: float, latitude: float, 
-                       location_name: str, karst_status: str, output_manager) -> Dict[str, Any]:
-    """Generate karst map based on cadastral analysis results"""
-    
+def _generate_karst_map_for_cadastral(cadastral_number: str, buffer_miles: float, 
+                                    output_manager, karst_result: Dict[str, Any]) -> Optional[str]:
+    """Generate karst map for a cadastral using the KarstMapGenerator"""
     try:
-        # Get maps directory
+        # Import here to avoid circular imports
+        from .karst_map_generator import KarstMapGenerator
+        from cadastral.cadastral_search import MIPRCadastralSearch
+        import math
+        
+        # Get cadastral coordinates with geometry
+        cadastral_search = MIPRCadastralSearch()
+        cadastral_data = cadastral_search.search_by_cadastral(cadastral_number, include_geometry=True)
+        
+        if not cadastral_data.get('success') or not cadastral_data.get('results'):
+            print(f"⚠️ Could not retrieve cadastral data for map generation")
+            return None
+        
+        # Extract coordinates from cadastral data
+        primary_result = cadastral_data['results'][0]
+        
+        # Calculate centroid from polygon geometry
+        longitude, latitude = None, None
+        geometry = primary_result.get('geometry')
+        if geometry and 'rings' in geometry and geometry['rings']:
+            # Get the outer ring (first ring) and calculate centroid
+            outer_ring = geometry['rings'][0]
+            if outer_ring:
+                # Convert from Web Mercator to WGS84 and calculate centroid
+                total_x, total_y = 0, 0
+                valid_points = 0
+                
+                for point in outer_ring:
+                    if len(point) >= 2:
+                        x, y = point[0], point[1]
+                        
+                        # Convert from Web Mercator (EPSG:3857) to WGS84 (EPSG:4326)
+                        lon = x / 20037508.34 * 180
+                        lat = y / 20037508.34 * 180
+                        lat = 180 / math.pi * (2 * math.atan(math.exp(lat * math.pi / 180)) - math.pi / 2)
+                        
+                        total_x += lon
+                        total_y += lat
+                        valid_points += 1
+                
+                if valid_points > 0:
+                    longitude = total_x / valid_points
+                    latitude = total_y / valid_points
+        
+        if longitude is None or latitude is None:
+            print(f"⚠️ Could not calculate centroid from cadastral geometry")
+            return None
+        
+        municipality = primary_result.get('municipality', 'Unknown')
+        
+        # Get maps directory from output manager
         maps_dir = output_manager.get_subdirectory("maps")
         
         # Initialize map generator
         map_generator = KarstMapGenerator(output_directory=maps_dir)
         
-        # Determine optimal settings based on karst status
-        if karst_status in ['direct_intersection', 'direct']:
-            # If within karst area, use smaller buffer for detail
-            buffer_miles = 0.75
-            map_title = f"Karst Area Analysis - {location_name} (Cadastral {cadastral_number})"
-            reasoning = "Cadastral within PRAPEC karst area - using detailed view"
-        elif karst_status in ['nearby_karst', 'nearby']:
-            # If near karst area, use moderate buffer to show proximity
-            buffer_miles = 1.5
-            map_title = f"Karst Proximity Analysis - {location_name} (Cadastral {cadastral_number})"
-            reasoning = "Cadastral near PRAPEC karst area - showing proximity context"
-        else:
-            # If no karst nearby, use larger buffer for regional context
-            buffer_miles = 2.0
-            map_title = f"Karst Area Assessment - {location_name} (Cadastral {cadastral_number})"
-            reasoning = "No nearby karst areas - showing regional context"
+        # Generate descriptive location name
+        location_name = f"Karst Analysis - Cadastral {cadastral_number}, {municipality}"
         
-        print(f"🗺️  Generating karst map: {reasoning}")
-        print(f"   📏 Buffer: {buffer_miles} miles")
-        print(f"   🏷️  Title: {map_title}")
-        
-        # Generate PDF map
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        cadastral_safe = cadastral_number.replace('-', '_')
-        output_prefix = f"karst_analysis_{cadastral_safe}_{timestamp}"
-        
+        # Generate the map
         map_path = map_generator.generate_map_export(
             longitude=longitude,
             latitude=latitude,
-            location_name=map_title,
+            location_name=location_name,
             buffer_miles=buffer_miles,
-            base_map_name="World_Topo_Map",  # Good for geological features
+            base_map_name="World_Topo_Map",
             output_format="PDF",
             layout_template="Letter ANSI A Landscape",
             dpi=300,
-            output_filename_prefix=output_prefix
+            output_filename_prefix=f"karst_analysis_{cadastral_number.replace('-', '_')}"
         )
         
-        if map_path and os.path.exists(map_path):
-            file_size = os.path.getsize(map_path)
-            print(f"✅ Karst map generated successfully: {os.path.basename(map_path)} ({file_size:,} bytes)")
-            
-            return {
-                "success": True,
-                "filename": map_path,
-                "buffer_miles": buffer_miles,
-                "map_title": map_title,
-                "reasoning": reasoning,
-                "file_size_bytes": file_size,
-                "message": f"Karst map generated with {buffer_miles}-mile buffer showing PRAPEC karst areas and zones"
-            }
-        else:
-            print(f"⚠️  Karst map generation returned no file")
-            return {
-                "success": False,
-                "error": "Map generation returned no file",
-                "reasoning": reasoning,
-                "attempted_settings": {
-                    "buffer_miles": buffer_miles,
-                    "format": "PDF",
-                    "base_map": "World_Topo_Map"
-                }
-            }
-    
+        return map_path
+        
     except Exception as e:
         print(f"❌ Error generating karst map: {str(e)}")
-        return {
-            "success": False,
-            "error": str(e),
-            "reasoning": "Map generation failed due to technical error"
-        }
+        return None
 
 # Tool list for easy import
 KARST_TOOLS = [
