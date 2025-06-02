@@ -647,6 +647,17 @@ class ComprehensiveReportGenerator:
             elif karst_proximity == 'moderate':
                 geological_significance = "Low-Moderate - Some karst influence possible"
             
+            # Get map reference from generated files or use default
+            map_reference = "karst_analysis_map.pdf"  # Default reference
+            if summary.get('map_generation', {}).get('success') and summary.get('map_generation', {}).get('filename'):
+                # Use the actual generated map filename
+                map_filename = summary['map_generation']['filename']
+                map_reference = os.path.basename(map_filename)
+            elif summary.get('files_generated', {}).get('map_file'):
+                # Alternative path for map file
+                map_filename = summary['files_generated']['map_file']
+                map_reference = os.path.basename(map_filename)
+            
             return KarstAnalysis(
                 within_karst_area=within_karst,
                 karst_proximity=karst_proximity,
@@ -655,7 +666,7 @@ class ComprehensiveReportGenerator:
                 development_constraints=development_constraints,
                 geological_significance=geological_significance,
                 permit_requirements=permit_requirements,
-                map_reference="karst_analysis_map.pdf"  # Default reference
+                map_reference=map_reference
             )
             
         elif 'batch_summary' in data:
