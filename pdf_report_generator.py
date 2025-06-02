@@ -414,7 +414,30 @@ class ScreeningPDFGenerator:
         story = []
         story.append(Paragraph("4. Karst Analysis (Applicable to Puerto Rico)", self.styles['SectionHeader']))
         if self.report_data.karst_analysis:
-            story.append(Paragraph("Karst analysis data available", self.styles['BodyText'])) # Placeholder
+            ka = self.report_data.karst_analysis
+            data = [
+                ['Within Karst Area', 'Yes' if ka.within_karst_area else 'No'],
+                ['Karst Proximity', ka.karst_proximity.title()],
+                ['Distance to Nearest', f"{ka.distance_to_nearest} miles" if ka.distance_to_nearest else 'N/A'],
+                ['Regulatory Impact', ka.regulatory_impact.title()],
+                ['Geological Significance', ka.geological_significance]
+            ]
+            table = Table(data, colWidths=[2*inch, 4*inch])
+            table.setStyle(self._get_standard_table_style())
+            story.append(table)
+            story.append(Spacer(1, 15))
+            
+            story.append(Paragraph("Development Constraints", self.styles['SubSectionHeader']))
+            for constraint in ka.development_constraints:
+                story.append(Paragraph(f"• {constraint}", self.styles['BulletList']))
+            story.append(Spacer(1, 10))
+            
+            story.append(Paragraph("Permit Requirements", self.styles['SubSectionHeader']))
+            for req in ka.permit_requirements:
+                story.append(Paragraph(f"• {req}", self.styles['BulletList']))
+            story.append(Spacer(1, 10))
+            
+            story.append(Paragraph(f"Map Reference: {ka.map_reference}", self.styles['BodyText']))
         else:
             story.append(Paragraph("Karst analysis not available in current dataset.", self.styles['BodyText']))
         story.extend(self._add_maps_for_section('karst', "Karst Maps (Appended Separately if PDF)"))

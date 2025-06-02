@@ -569,76 +569,8 @@ class ComprehensiveReportGenerator:
             
         data = self.json_files['karst']
         
-        # Handle new comprehensive karst analysis format
-        if 'karst_analysis' in data and 'analysis_metadata' in data:
-            # New comprehensive format from analyze_cadastral_karst_with_map
-            karst_analysis = data['karst_analysis']
-            regulatory_implications = data.get('regulatory_implications', {})
-            development_guidance = data.get('development_guidance', {})
-            
-            within_karst = karst_analysis.get('within_karst_area', False)
-            karst_proximity = karst_analysis.get('karst_proximity', 'none')
-            distance_to_nearest = karst_analysis.get('distance_to_karst_miles')
-            
-            # Parse distance if it's a string like "> 1.0"
-            if isinstance(distance_to_nearest, str) and distance_to_nearest.startswith('>'):
-                distance_to_nearest = None
-            elif isinstance(distance_to_nearest, str):
-                try:
-                    distance_to_nearest = float(distance_to_nearest)
-                except ValueError:
-                    distance_to_nearest = None
-            
-            # Extract regulatory impact
-            regulatory_impact = karst_analysis.get('regulatory_impact', 'minimal')
-            
-            # Extract development constraints from development guidance
-            development_constraints = development_guidance.get('primary_constraints', [])
-            if not development_constraints:
-                development_constraints = [karst_analysis.get('assessment', 'No specific karst constraints identified')]
-            
-            # Extract permit requirements from regulatory implications
-            permit_requirements = []
-            if regulatory_implications.get('special_permits_required'):
-                permit_requirements.extend([
-                    f"PRAPEC {regulatory_implications.get('primary_regulation', 'Regulation 259')} compliance",
-                    "Environmental impact assessment",
-                    "Geological studies required"
-                ])
-            elif regulatory_implications.get('geological_studies_required'):
-                permit_requirements.append("Geological assessment recommended")
-            else:
-                permit_requirements.append("Standard permitting requirements")
-            
-            # Generate geological significance
-            risk_level = karst_analysis.get('risk_level', 'low')
-            if risk_level == 'high':
-                geological_significance = "High - Property within designated PRAPEC karst area"
-            elif risk_level == 'moderate':
-                geological_significance = "Moderate - Close proximity to PRAPEC karst features"
-            else:
-                geological_significance = "Low - No immediate karst-related constraints"
-            
-            # Check for map file reference
-            map_files = data.get('files_generated', {})
-            map_reference = "karst_analysis_map.pdf"  # Default
-            if map_files.get('map_file'):
-                import os
-                map_reference = os.path.basename(map_files['map_file'])
-            
-            return KarstAnalysis(
-                within_karst_area=within_karst,
-                karst_proximity=karst_proximity,
-                distance_to_nearest=distance_to_nearest,
-                regulatory_impact=regulatory_impact,
-                development_constraints=development_constraints,
-                geological_significance=geological_significance,
-                permit_requirements=permit_requirements,
-                map_reference=map_reference
-            )
-        
-        # Handle old processed_summary format (original karst tools)
-        elif 'processed_summary' in data:
+        # Handle both single and batch karst analysis formats
+        if 'processed_summary' in data:
             # Single karst analysis format
             summary = data['processed_summary']
             raw_result = data.get('raw_result', {})
@@ -715,16 +647,6 @@ class ComprehensiveReportGenerator:
             elif karst_proximity == 'moderate':
                 geological_significance = "Low-Moderate - Some karst influence possible"
             
-            # Check for generated map file
-            map_reference = "karst_analysis_map.pdf"  # Default reference
-            files_generated = summary.get('files_generated', {})
-            if files_generated.get('map_file'):
-                import os
-                map_reference = os.path.basename(files_generated['map_file'])
-            elif data.get('files_generated', {}).get('map_file'):
-                import os
-                map_reference = os.path.basename(data['files_generated']['map_file'])
-            
             return KarstAnalysis(
                 within_karst_area=within_karst,
                 karst_proximity=karst_proximity,
@@ -733,7 +655,7 @@ class ComprehensiveReportGenerator:
                 development_constraints=development_constraints,
                 geological_significance=geological_significance,
                 permit_requirements=permit_requirements,
-                map_reference=map_reference
+                map_reference="karst_analysis_map.pdf"  # Default reference
             )
             
         elif 'batch_summary' in data:
@@ -809,7 +731,7 @@ class ComprehensiveReportGenerator:
         # Enhanced Key Environmental Constraints
         constraints = []
         
-        if flood and flood.fema_flood_zone in ['AE', 'VE', 'A']:
+        if flood and flood.fema_flood_zone in ['AE', 'VE', 'A', 'AH', 'AO']:
             constraints.append(f"Flood risk: Located in FEMA Zone {flood.fema_flood_zone} requiring special flood hazard area compliance")
         elif flood and flood.fema_flood_zone == 'X':
             constraints.append("Flood risk: Low risk area outside special flood hazard zone")
