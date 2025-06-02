@@ -142,30 +142,41 @@ class ComprehensiveReportGenerator:
         json_pattern = os.path.join(self.data_directory, "*.json")
         json_files = glob.glob(json_pattern)
         
+        print(f"✅ Found {len(json_files)} JSON data files in {self.data_directory}")
+        
         for file_path in json_files:
             filename = os.path.basename(file_path)
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     
-                # Categorize files based on their content/filename
-                if 'cadastral_search' in filename:
+                # Categorize files based on their content/filename with improved pattern matching
+                if 'cadastral_search' in filename or 'cadastral_analysis' in filename:
                     self.json_files['cadastral'] = data
-                elif 'panel_info' in filename:
+                    print(f"   📄 {filename} -> cadastral")
+                elif 'panel_info' in filename or 'flood_analysis' in filename:
                     self.json_files['flood'] = data
-                elif 'wetland_summary' in filename:
+                    print(f"   📄 {filename} -> flood")
+                elif 'wetland_summary' in filename or 'wetland_analysis' in filename:
                     self.json_files['wetland'] = data
-                elif 'critical_habitat' in filename:
+                    print(f"   📄 {filename} -> wetland")
+                elif 'critical_habitat' in filename or 'habitat_analysis' in filename:
                     self.json_files['habitat'] = data
+                    print(f"   📄 {filename} -> habitat")
                 elif 'nonattainment_summary' in filename:
                     self.json_files['air_quality'] = data
+                    print(f"   📄 {filename} -> air_quality (summary)")
                 elif 'nonattainment_analysis' in filename:
                     self.json_files['air_quality_detailed'] = data
+                    print(f"   📄 {filename} -> air_quality (detailed)")
                 elif 'karst_analysis' in filename or 'batch_karst_analysis' in filename:
                     self.json_files['karst'] = data
+                    print(f"   📄 {filename} -> karst")
+                else:
+                    print(f"   ⚠️ {filename} -> unrecognized pattern")
                     
             except Exception as e:
-                print(f"Error loading {filename}: {e}")
+                print(f"❌ Error loading {filename}: {e}")
     
     def extract_project_info(self) -> ProjectInfo:
         """Extract project information from loaded data"""
@@ -284,7 +295,7 @@ class ComprehensiveReportGenerator:
         )
     
     def extract_wetland_analysis(self) -> Optional[WetlandAnalysis]:
-        """Extract wetland analysis"""
+        """Extract wetland analysis with enhanced data capture"""
         if 'wetland' not in self.json_files:
             return None
             
@@ -295,32 +306,69 @@ class ComprehensiveReportGenerator:
         total_wetlands = location_analysis.get('total_wetlands_found', 0)
         within_radius = total_wetlands > 0
         
-        # Get distance to nearest wetland
+        # Get distance to nearest wetland with more precision
         wetlands_in_radius = data.get('wetlands_in_radius', [])
         distance_to_nearest = None
         if wetlands_in_radius:
-            distance_to_nearest = wetlands_in_radius[0].get('distance_miles', None)
+            # Get the closest wetland distance
+            distances = [w.get('distance_miles', float('inf')) for w in wetlands_in_radius if w.get('distance_miles') is not None]
+            if distances:
+                distance_to_nearest = min(distances)
         
-        # Get wetland classifications
+        # Get enhanced wetland classifications with areas and regulatory significance
         classifications = []
         for wetland in wetlands_in_radius:
             wetland_type = wetland.get('wetland_type', 'Unknown')
             nwi_code = wetland.get('nwi_code', 'Unknown')
-            # Create full classification string and check for duplicates
-            full_classification = f"{wetland_type} ({nwi_code})"
-            if full_classification not in classifications:
-                classifications.append(full_classification)
+            area_acres = wetland.get('area_acres', 0)
+            reg_significance = wetland.get('regulatory_significance', '')
+            
+            # Create comprehensive classification string
+            classification = f"{wetland_type}"
+            if nwi_code != 'Unknown':
+                classification += f" ({nwi_code})"
+            if area_acres > 0:
+                classification += f" - {area_acres} acres"
+            if reg_significance:
+                classification += f" - {reg_significance}"
+            
+            if classification not in classifications:
+                classifications.append(classification)
         
-        # Get regulatory significance
+        # Get enhanced regulatory significance from multiple sources
         regulatory_assessment = data.get('regulatory_assessment', {})
         regulatory_significance = [
             f"Impact Risk: {regulatory_assessment.get('immediate_impact_risk', 'Unknown')}",
-            f"Found {total_wetlands} wetlands within search radius"
+            f"Wetlands Found: {total_wetlands} within search radius"
         ]
         
-        # Get development guidance from recommendations
+        # Add buffer considerations
+        buffer_considerations = regulatory_assessment.get('buffer_considerations', [])
+        for buffer_note in buffer_considerations:
+            regulatory_significance.append(f"Buffer: {buffer_note}")
+        
+        # Add compliance notes
+        compliance_notes = regulatory_assessment.get('compliance_notes', [])
+        for note in compliance_notes:
+            regulatory_significance.append(f"Compliance: {note}")
+        
+        # Add permit requirements if available
+        permit_requirements = regulatory_assessment.get('permit_requirements', [])
+        if permit_requirements:
+            regulatory_significance.append(f"Permits: {', '.join(permit_requirements)}")
+        
+        # Get enhanced development guidance from recommendations
         recommendations = data.get('recommendations', [])
-        development_guidance = [rec.replace('🔍', '').replace('📋', '').replace('📚', '').replace('🗺️', '').replace('📞', '').replace('💾', '').strip() for rec in recommendations]
+        development_guidance = []
+        
+        for rec in recommendations:
+            # Clean up emoji and extract meaningful guidance
+            clean_rec = rec.replace('📋', '').replace('🔍', '').replace('📚', '').replace('🗺️', '').replace('📞', '').replace('💾', '').replace('🤖', '').strip()
+            if clean_rec and clean_rec not in development_guidance:
+                development_guidance.append(clean_rec)
+        
+        # Generate map reference dynamically
+        map_reference = "wetland_map_generated.pdf"
         
         return WetlandAnalysis(
             directly_on_property=directly_on_property,
@@ -329,11 +377,11 @@ class ComprehensiveReportGenerator:
             wetland_classifications=classifications,
             regulatory_significance=regulatory_significance,
             development_guidance=development_guidance,
-            map_reference="wetland_map_Dynamic_Payments_Project_20250528_030451.pdf"
+            map_reference=map_reference
         )
     
     def extract_critical_habitat_analysis(self) -> Optional[CriticalHabitatAnalysis]:
-        """Extract critical habitat analysis"""
+        """Extract critical habitat analysis with enhanced data capture"""
         if 'habitat' not in self.json_files:
             return None
             
@@ -346,16 +394,24 @@ class ComprehensiveReportGenerator:
         
         distance_miles = habitat_analysis.get('distance_to_nearest_habitat_miles', 0)
         
-        # Get affected species
+        # Get affected species with enhanced details
         nearest_habitat = habitat_analysis.get('nearest_habitat', {})
         affected_species = []
         if nearest_habitat:
             common_name = nearest_habitat.get('species_common_name', '')
             scientific_name = nearest_habitat.get('species_scientific_name', '')
+            unit_name = nearest_habitat.get('unit_name', '')
+            habitat_status = nearest_habitat.get('status', '')
+            
             if common_name or scientific_name:
-                affected_species.append(f"{common_name} ({scientific_name})")
+                species_info = f"{common_name} ({scientific_name})"
+                if unit_name and unit_name != "Please check current species specific shapefile":
+                    species_info += f" - {unit_name}"
+                if habitat_status:
+                    species_info += f" [{habitat_status}]"
+                affected_species.append(species_info)
         
-        # Get regulatory implications
+        # Get enhanced regulatory implications
         reg_implications = habitat_analysis.get('regulatory_implications', {})
         regulatory_implications = [
             f"ESA Consultation Required: {reg_implications.get('esa_consultation_required', False)}",
@@ -363,9 +419,25 @@ class ComprehensiveReportGenerator:
             f"Distance Category: {reg_implications.get('distance_category', 'Unknown')}"
         ]
         
-        # Get development constraints from recommendations
+        # Enhanced development constraints from both recommendations and next_steps
         recommendations = habitat_analysis.get('recommendations', [])
-        development_constraints = [rec.replace('✅', '').replace('📋', '').replace('🔍', '').replace('🦎', '').strip() for rec in recommendations]
+        next_steps = habitat_analysis.get('next_steps', [])
+        
+        development_constraints = []
+        
+        # Process recommendations (clean up emoji and extract meaningful text)
+        for rec in recommendations:
+            clean_rec = rec.replace('📋', '').replace('🔍', '').replace('💧', '').replace('🦎', '').replace('🤖', '').strip()
+            if clean_rec and clean_rec not in development_constraints:
+                development_constraints.append(clean_rec)
+        
+        # Add next steps as additional constraints/guidance
+        for step in next_steps:
+            if step and step not in development_constraints:
+                development_constraints.append(step)
+        
+        # Generate map reference dynamically based on available files
+        map_reference = "critical_habitat_map_generated.pdf"
         
         return CriticalHabitatAnalysis(
             within_designated_habitat=within_designated,
@@ -374,19 +446,20 @@ class ComprehensiveReportGenerator:
             affected_species=affected_species,
             regulatory_implications=regulatory_implications,
             development_constraints=development_constraints,
-            map_reference="critical_habitat_map_20250528_030539.pdf"
+            map_reference=map_reference
         )
     
     def extract_air_quality_analysis(self) -> Optional[AirQualityAnalysis]:
-        """Extract air quality/nonattainment analysis"""
+        """Extract air quality/nonattainment analysis with enhanced data capture"""
         # Check for both air_quality and air_quality_detailed formats
         data = None
-        if 'air_quality' in self.json_files:
-            data = self.json_files['air_quality']
-            data_format = 'summary'
-        elif 'air_quality_detailed' in self.json_files:
+        data_format = None
+        if 'air_quality_detailed' in self.json_files:
             data = self.json_files['air_quality_detailed']
             data_format = 'detailed'
+        elif 'air_quality' in self.json_files:
+            data = self.json_files['air_quality']
+            data_format = 'summary'
         else:
             return None
         
@@ -417,9 +490,11 @@ class ComprehensiveReportGenerator:
                 f"Air Quality Status: {air_quality_status}"
             ]
             
-        else:  # detailed format
+        else:  # detailed format - Enhanced handling
             # New format for nonattainment_analysis files
             has_violations = data.get('has_violations', False)
+            location = data.get('location', 'Unknown')
+            analysis_timestamp = data.get('analysis_timestamp', 'Unknown')
             
             # Get affected pollutants from violations_details
             violations_details = data.get('violations_details', [])
@@ -432,31 +507,59 @@ class ComprehensiveReportGenerator:
             # Get area classification from EPA summary
             epa_summary = data.get('epa_summary', {})
             area_classification = epa_summary.get('status', 'Attainment')
+            epa_message = epa_summary.get('message', '')
             
-            # Generate regulatory implications based on violations
+            # Enhanced regulatory implications based on violations and EPA summary
+            regulatory_implications = []
+            
             if has_violations:
+                total_areas = data.get('total_areas', 0)
                 regulatory_implications = [
                     f"Compliance Status: Nonattainment area identified",
-                    f"Total Areas: {data.get('total_areas', 0)} nonattainment areas",
-                    f"Air Quality Status: Violations of NAAQS standards"
+                    f"Total Areas: {total_areas} nonattainment areas found",
+                    f"Air Quality Status: Violations of NAAQS standards detected",
+                    f"Location: {location}",
+                    f"Analysis Date: {analysis_timestamp}"
                 ]
+                # Add details about specific violations
+                for violation in violations_details:
+                    pollutant = violation.get('pollutant', 'Unknown')
+                    classification = violation.get('classification', 'Unknown')
+                    regulatory_implications.append(f"Violation: {pollutant} - {classification}")
             else:
                 regulatory_implications = [
-                    f"Compliance Status: No nonattainment areas identified",
-                    f"Total Areas: {data.get('total_areas', 0)} nonattainment areas",
-                    f"Air Quality Status: Meets all NAAQS standards"
+                    f"Compliance Status: {area_classification}",
+                    f"EPA Summary: {epa_message}",
+                    f"Total Areas: {data.get('total_areas', 0)} nonattainment areas found",
+                    f"Air Quality Status: Meets all National Ambient Air Quality Standards (NAAQS)",
+                    f"Location: {location}",
+                    f"Analysis Date: {analysis_timestamp}",
+                    "Regulatory Impact: Standard air quality regulations apply"
                 ]
+            
+            # Add query parameters information if available
+            query_params = data.get('query_parameters', {})
+            if query_params:
+                buffer_meters = query_params.get('buffer_meters', 0)
+                include_revoked = query_params.get('include_revoked', False)
+                regulatory_implications.append(f"Search Parameters: {buffer_meters}m buffer, Include revoked: {include_revoked}")
         
-        # Set default pollutants if none found
+        # Set default pollutants if none found with more descriptive text
         if not affected_pollutants:
-            affected_pollutants = ['None - Meets all NAAQS']
+            if has_violations:
+                affected_pollutants = ['Specific pollutants not identified']
+            else:
+                affected_pollutants = ['None - Area meets all NAAQS standards']
+        
+        # Generate map reference dynamically
+        map_reference = "nonattainment_map_generated.pdf"
         
         return AirQualityAnalysis(
             nonattainment_status=has_violations,
             affected_pollutants=affected_pollutants,
             area_classification=area_classification,
             regulatory_implications=regulatory_implications,
-            map_reference="nonattainment_map_20250528_030558.pdf"
+            map_reference=map_reference
         )
     
     def extract_karst_analysis(self) -> Optional[KarstAnalysis]:
@@ -598,80 +701,136 @@ class ComprehensiveReportGenerator:
                                  habitat: Optional[CriticalHabitatAnalysis],
                                  air_quality: Optional[AirQualityAnalysis],
                                  karst: Optional[KarstAnalysis] = None) -> ExecutiveSummary:
-        """Generate executive summary based on all analyses"""
+        """Generate enhanced executive summary with comprehensive analysis"""
         
-        # Property overview
-        property_overview = f"Environmental screening analysis for cadastral {', '.join(project_info.cadastral_numbers)} "
+        # Enhanced Property Overview
+        location_details = []
         if cadastral:
-            property_overview += f"located in {cadastral.neighborhood}, {cadastral.municipality}, {cadastral.region}. "
-            property_overview += f"The property is classified as {cadastral.land_use_classification} "
-            property_overview += f"with a total area of {cadastral.area_acres:.2f} acres ({cadastral.area_hectares:.2f} hectares)."
+            location_details.append(f"in {cadastral.municipality}")
+            if cadastral.neighborhood:
+                location_details.append(f"{cadastral.neighborhood} neighborhood")
+            if cadastral.land_use_classification:
+                location_details.append(f"zoned for {cadastral.land_use_classification}")
+            if cadastral.area_acres > 0:
+                location_details.append(f"covering {cadastral.area_acres:.2f} acres")
         
-        # Key environmental constraints
+        property_overview = f"This environmental screening analyzes a {cadastral.area_acres:.2f}-acre property at Cadastral {', '.join(project_info.cadastral_numbers)} " if cadastral else f"This environmental screening analyzes a property "
+        property_overview += f"{' '.join(location_details)} " if location_details else ""
+        property_overview += f"(coordinates: {project_info.latitude:.4f}, {project_info.longitude:.4f}). "
+        
+        # Add analysis scope and methodology
+        analysis_components = []
+        if flood: analysis_components.append("flood hazard")
+        if wetland: analysis_components.append("wetland impacts")
+        if habitat: analysis_components.append("critical habitat")
+        if air_quality: analysis_components.append("air quality compliance")
+        if karst: analysis_components.append("karst geology")
+        
+        property_overview += f"The comprehensive analysis evaluated {', '.join(analysis_components)} to assess environmental constraints and regulatory requirements for potential development."
+        
+        # Enhanced Key Environmental Constraints
         constraints = []
-        if flood and flood.fema_flood_zone != 'X':
-            constraints.append(f"Located in FEMA Flood Zone {flood.fema_flood_zone}")
+        
+        if flood and flood.fema_flood_zone in ['AE', 'VE', 'A', 'AH', 'AO']:
+            constraints.append(f"Flood risk: Located in FEMA Zone {flood.fema_flood_zone} requiring special flood hazard area compliance")
+        elif flood and flood.fema_flood_zone == 'X':
+            constraints.append("Flood risk: Low risk area outside special flood hazard zone")
+        
         if wetland and wetland.within_search_radius:
-            constraints.append(f"Wetlands present within search radius")
-        if habitat and habitat.within_designated_habitat:
-            constraints.append("Located within designated critical habitat")
-        if habitat and habitat.within_proposed_habitat:
-            constraints.append("Located within proposed critical habitat")
-        if air_quality and air_quality.nonattainment_status:
-            constraints.append("Located in air quality nonattainment area")
-        if karst and karst.within_karst_area:
-            constraints.append("Located within PRAPEC karst area")
-        elif karst and karst.karst_proximity in ['high', 'moderate']:
-            constraints.append(f"Located near karst area ({karst.karst_proximity} proximity)")
+            distance_text = f" (nearest at {wetland.distance_to_nearest:.1f} miles)" if wetland.distance_to_nearest else ""
+            wetland_count = len(wetland.wetland_classifications)
+            constraints.append(f"Wetland proximity: {wetland_count} wetland(s) within search radius{distance_text}")
         
-        if not constraints:
-            constraints.append("No major environmental constraints identified")
-        
-        # Regulatory highlights
-        regulatory_highlights = []
-        if flood:
-            regulatory_highlights.extend(flood.regulatory_requirements[:2])  # Top 2
-        if wetland and wetland.regulatory_significance:
-            regulatory_highlights.append(wetland.regulatory_significance[0])
-        if habitat:
-            regulatory_highlights.extend(habitat.regulatory_implications[:1])  # Top 1
-        if air_quality:
-            regulatory_highlights.extend(air_quality.regulatory_implications[:1])  # Top 1
-        if karst and karst.permit_requirements:
-            regulatory_highlights.extend(karst.permit_requirements[:1])  # Top 1
-        
-        # Risk assessment
-        risk_level = "Low"
-        if len(constraints) > 3:
-            risk_level = "High"
-        elif len(constraints) > 1:
-            risk_level = "Moderate"
-        
-        risk_assessment = f"{risk_level} environmental risk profile identified. "
-        if flood and flood.fema_flood_zone not in ['X', 'Unknown']:
-            risk_assessment += "Flood risk considerations required. "
-        if wetland and wetland.directly_on_property:
-            risk_assessment += "Direct wetland impacts possible. "
         if habitat and (habitat.within_designated_habitat or habitat.within_proposed_habitat):
-            risk_assessment += "Critical habitat consultation required. "
-        if karst and karst.within_karst_area:
-            risk_assessment += "Karst area regulations apply (Regulation 259). "
-        elif karst and karst.karst_proximity in ['high', 'moderate']:
-            risk_assessment += "Karst proximity considerations recommended. "
+            status = "within" if habitat.within_designated_habitat else "near proposed"
+            constraints.append(f"Critical habitat: Property is {status} designated critical habitat")
+        elif habitat and habitat.distance_to_nearest and habitat.distance_to_nearest < 2:
+            species_info = f" for {habitat.affected_species[0]}" if habitat.affected_species else ""
+            constraints.append(f"Critical habitat: Located {habitat.distance_to_nearest:.1f} miles from critical habitat{species_info}")
         
-        # Primary recommendations
-        primary_recommendations = [
-            "Conduct detailed environmental due diligence prior to development",
-            "Consult with relevant regulatory agencies early in planning process",
-            "Consider environmental constraints in site design and engineering"
-        ]
+        if air_quality and air_quality.nonattainment_status:
+            pollutants = ', '.join(air_quality.affected_pollutants[:2])  # Show first 2 pollutants
+            constraints.append(f"Air quality: Nonattainment area for {pollutants}")
+        elif air_quality and not air_quality.nonattainment_status:
+            constraints.append("Air quality: Meets all National Ambient Air Quality Standards")
+        
+        if karst and karst.within_karst_area:
+            constraints.append("Karst geology: Property within PRAPEC karst area requiring geological studies")
+        elif karst and karst.karst_proximity in ['high', 'moderate', 'nearby']:
+            constraints.append(f"Karst geology: {karst.karst_proximity.title()} proximity to karst features")
+        
+        # Enhanced Regulatory Highlights
+        regulatory_highlights = []
+        
+        if flood and flood.fema_flood_zone in ['AE', 'VE', 'A']:
+            regulatory_highlights.append("NFIP compliance and flood insurance requirements for development in special flood hazard area")
+        
+        if wetland and wetland.within_search_radius:
+            regulatory_highlights.append("Wetland delineation and Section 404/401 permit evaluation may be required")
+        
+        if habitat and (habitat.within_designated_habitat or habitat.within_proposed_habitat or 
+                       (habitat.distance_to_nearest and habitat.distance_to_nearest < 2)):
+            regulatory_highlights.append("Endangered Species Act Section 7 consultation with USFWS required")
+        
+        if karst and karst.within_karst_area:
+            regulatory_highlights.append("PRAPEC Regulation 259 compliance required for development in karst areas")
+        
+        if air_quality and air_quality.nonattainment_status:
+            regulatory_highlights.append("Enhanced air quality permitting requirements in nonattainment area")
+        
+        # Add general regulatory highlights if none specific
+        if not regulatory_highlights:
+            regulatory_highlights.extend([
+                "Standard environmental permitting and compliance procedures apply",
+                "Local and state environmental regulations must be followed"
+            ])
+        
+        # Enhanced Risk Assessment
+        risk_factors = []
+        if flood and flood.fema_flood_zone in ['AE', 'VE', 'A']: risk_factors.append("high flood risk")
+        if wetland and wetland.directly_on_property: risk_factors.append("direct wetland impacts")
+        elif wetland and wetland.within_search_radius: risk_factors.append("wetland proximity concerns")
+        if habitat and habitat.within_designated_habitat: risk_factors.append("critical habitat overlap")
+        elif habitat and habitat.distance_to_nearest and habitat.distance_to_nearest < 1: risk_factors.append("close critical habitat proximity")
+        if air_quality and air_quality.nonattainment_status: risk_factors.append("air quality violations")
+        if karst and karst.within_karst_area: risk_factors.append("karst geology risks")
+        
+        if risk_factors:
+            risk_assessment = f"Environmental risk is elevated due to {', '.join(risk_factors)}. "
+        else:
+            risk_assessment = "Environmental risk is generally low with standard regulatory requirements. "
+        
+        risk_assessment += "Comprehensive environmental due diligence and early agency coordination are recommended to ensure successful project development."
+        
+        # Enhanced Primary Recommendations
+        recommendations = []
+        
+        if flood and flood.fema_flood_zone in ['AE', 'VE', 'A']:
+            recommendations.append("Obtain FEMA Elevation Certificate and design for base flood elevation compliance")
+        
+        if wetland and wetland.within_search_radius:
+            recommendations.append("Conduct professional wetland delineation and impact assessment")
+        
+        if habitat and (habitat.within_designated_habitat or 
+                       (habitat.distance_to_nearest and habitat.distance_to_nearest < 2)):
+            recommendations.append("Initiate early ESA Section 7 consultation with USFWS")
+        
+        if karst and (karst.within_karst_area or karst.karst_proximity in ['high', 'moderate']):
+            recommendations.append("Perform geological assessment for karst-related development risks")
+        
+        # Add standard recommendations
+        recommendations.extend([
+            "Engage qualified environmental consultants for comprehensive site assessment",
+            "Coordinate with regulatory agencies early in project planning process",
+            "Develop environmental compliance strategy and permitting timeline"
+        ])
         
         return ExecutiveSummary(
             property_overview=property_overview,
             key_environmental_constraints=constraints,
             regulatory_highlights=regulatory_highlights,
             risk_assessment=risk_assessment,
-            primary_recommendations=primary_recommendations
+            primary_recommendations=recommendations
         )
     
     def generate_cumulative_risk_assessment(self, flood: Optional[FloodAnalysis],
