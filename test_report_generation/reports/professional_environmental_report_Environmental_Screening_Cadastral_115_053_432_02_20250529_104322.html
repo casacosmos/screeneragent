@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Environmental Screening - Cadastral 115-053-432-02 - Environmental Screening Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+        }
+        
+        .container {
+            max-width: 8.5in;
+            margin: 0 auto;
+            padding: 0.5in;
+        }
+        
+        /* Header Styles */
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #2c5aa0;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .main-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c5aa0;
+            margin-bottom: 10px;
+        }
+        
+        .project-title {
+            font-size: 20px;
+            color: #444;
+            margin-bottom: 15px;
+        }
+        
+        .analysis-date {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        /* Section Styles */
+        .section {
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }
+        
+        .section-header {
+            background: linear-gradient(135deg, #2c5aa0, #4a7bc8);
+            color: white;
+            padding: 12px 16px;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+        
+        .subsection-header {
+            background: #f0f4f8;
+            color: #2c5aa0;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: bold;
+            margin: 15px 0 8px 0;
+            border-left: 4px solid #2c5aa0;
+        }
+        
+        /* Data Table Styles */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+        
+        .data-table th,
+        .data-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #2c5aa0;
+            width: 30%;
+        }
+        
+        .data-table td {
+            background: #fff;
+        }
+        
+        /* Copyable Data Styles */
+        .copyable-data {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            border-radius: 3px;
+            margin: 5px 0;
+            user-select: all;
+        }
+        
+        /* Alert Boxes */
+        .alert {
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .alert-critical {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .alert-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        /* List Styles */
+        .constraint-list,
+        .requirement-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .constraint-list li,
+        .requirement-list li {
+            background: #f8f9fa;
+            margin: 3px 0;
+            padding: 6px 10px;
+            border-left: 3px solid #2c5aa0;
+            font-size: 12px;
+        }
+        
+        /* Map Embedding */
+        .map-container {
+            text-align: center;
+            margin: 15px 0;
+            page-break-inside: avoid;
+        }
+        
+        .map-image {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .map-caption {
+            font-style: italic;
+            color: #666;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+        
+        /* Checklist Table */
+        .checklist-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 12px;
+        }
+        
+        .checklist-table th,
+        .checklist-table td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        .checklist-table th {
+            background: #2c5aa0;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .status-green {
+            background: #d4edda !important;
+            color: #155724;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status-yellow {
+            background: #fff3cd !important;
+            color: #856404;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status-red {
+            background: #f8d7da !important;
+            color: #721c24;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        /* Print Styles */
+        @media print {
+            body {
+                font-size: 10px;
+            }
+            
+            .section {
+                page-break-inside: avoid;
+            }
+            
+            .map-container {
+                page-break-inside: avoid;
+            }
+            
+            .checklist-table {
+                page-break-inside: avoid;
+            }
+        }
+        
+        /* Executive Summary Box */
+        .executive-summary {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border: 2px solid #2c5aa0;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .risk-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .risk-low {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .risk-moderate {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .risk-high {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="main-title">Comprehensive Environmental Screening Report</div>
+            <div class="project-title">Environmental Screening - Cadastral 115-053-432-02</div>
+            <div class="analysis-date">Analysis Date: 2025-05-28 03:48:43</div>
+        </div>
+        
+        <!-- Executive Summary -->
+        <div class="section">
+            <div class="section-header">Executive Summary</div>
+            <div class="executive-summary">
+                <p><strong>Overall Risk Level:</strong> 
+                    <span class="risk-badge risk-low">Low - Minimal environmental constraints identified</span>
+                </p>
+                
+                <p style="margin-top: 10px;"><strong>Property Overview:</strong> Environmental screening analysis for cadastral 115-053-432-02 located in Cupey, San Juan, Este. The property is classified as Residencial de Baja Densidad Poblacional (Solar Mínimo de 900 mts cuadrados) with a total area of 2.56 acres (1.04 hectares).</p>
+                <p style="margin-top: 10px;"><strong>Risk Assessment:</strong> Low environmental risk profile identified. </p>
+                
+            </div>
+        </div>
+        
+        <!-- Project Information -->
+        <div class="section">
+            <div class="section-header">1. Project Information</div>
+            <table class="data-table">
+                <tr>
+                    <th>Project Name</th>
+                    <td>Environmental Screening - Cadastral 115-053-432-02</td>
+                </tr>
+                <tr>
+                    <th>Location Description</th>
+                    <td>Dynamic Payments Project</td>
+                </tr>
+                <tr>
+                    <th>Coordinates (Lat, Lng)</th>
+                    <td><div class="copyable-data">18.356280, -66.044991</div></td>
+                </tr>
+                <tr>
+                    <th>Analysis Date</th>
+                    <td>2025-05-28 03:48:43</td>
+                </tr>
+                <tr>
+                    <th>Project Directory</th>
+                    <td><div class="copyable-data">output/Cadastral_115-053-432-02_2025-05-28_at_03.03.17</div></td>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- Property & Cadastral Analysis -->
+        
+        <div class="section">
+            <div class="section-header">2. Property & Cadastral Analysis</div>
+            <table class="data-table">
+                <tr>
+                    <th>Cadastral Number(s)</th>
+                    <td><div class="copyable-data">115-053-432-02</div></td>
+                </tr>
+                <tr>
+                    <th>Municipality</th>
+                    <td>San Juan</td>
+                </tr>
+                <tr>
+                    <th>Neighborhood</th>
+                    <td>Cupey</td>
+                </tr>
+                <tr>
+                    <th>Property Area</th>
+                    <td>2.56 acres (1.04 hectares)</td>
+                </tr>
+                <tr>
+                    <th>Land Use Classification</th>
+                    <td><div class="copyable-data">Residencial de Baja Densidad Poblacional (Solar Mínimo de 900 mts cuadrados)</div></td>
+                </tr>
+                <tr>
+                    <th>Zoning Designation</th>
+                    <td><div class="copyable-data">R-1</div></td>
+                </tr>
+                <tr>
+                    <th>Regulatory Status</th>
+                    <td> </td>
+                </tr>
+            </table>
+            
+            
+        </div>
+        
+        
+        <!-- Karst Analysis -->
+        
+        
+        <!-- Flood Analysis -->
+        
+        <div class="section">
+            <div class="section-header">4. Flood Analysis</div>
+            <table class="data-table">
+                <tr>
+                    <th>FEMA Flood Zone</th>
+                    <td><div class="copyable-data">X</div></td>
+                </tr>
+                <tr>
+                    <th>Base Flood Elevation</th>
+                    <td>None feet</td>
+                </tr>
+                <tr>
+                    <th>FIRM Panel</th>
+                    <td><div class="copyable-data">72000C0735J</div></td>
+                </tr>
+                <tr>
+                    <th>Effective Date</th>
+                    <td>11/18/2009</td>
+                </tr>
+                <tr>
+                    <th>Community Name</th>
+                    <td>Municipio de San Juan</td>
+                </tr>
+                
+                <tr>
+                    <th>Preliminary vs Effective</th>
+                    <td>Preliminary data available</td>
+                </tr>
+                
+            </table>
+            
+            
+            
+            
+            <div class="subsection-header">Regulatory Requirements</div>
+            <ul class="requirement-list">
+                
+                <li>Outside Special Flood Hazard Area</li>
+                
+                <li>Standard building codes apply</li>
+                
+                <li>Flood insurance optional but recommended</li>
+                
+            </ul>
+            
+            
+            
+            <div class="subsection-header">Flood Risk Assessment</div>
+            <p style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-left: 3px solid #2c5aa0; font-size: 12px;">Low - Outside Special Flood Hazard Area</p>
+            
+            
+            <!-- Embedded Flood Map -->
+            
+            
+            <!-- Embedded preFIRM Map -->
+            
+            
+            <!-- Embedded ABFE Map -->
+            
+        </div>
+        
+        
+        <!-- Wetland Analysis -->
+        
+        <div class="section">
+            <div class="section-header">5. Wetland Analysis</div>
+            <table class="data-table">
+                <tr>
+                    <th>Wetlands on Property</th>
+                    <td>No</td>
+                </tr>
+                <tr>
+                    <th>Within Search Radius</th>
+                    <td>Yes</td>
+                </tr>
+                <tr>
+                    <th>Distance to Nearest</th>
+                    <td>0.4 miles</td>
+                </tr>
+            </table>
+            
+            
+            <div class="alert alert-warning">
+                <strong>⚠️ WETLAND PROXIMITY:</strong> Wetlands within 0.5 miles - delineation study recommended
+            </div>
+            
+            
+            
+            <div class="subsection-header">Wetland Classifications</div>
+            <ul class="constraint-list">
+                
+                <li><div class="copyable-data">Riverine (Unknown)</div></li>
+                
+                <li><div class="copyable-data">Riverine (Unknown)</div></li>
+                
+                <li><div class="copyable-data">Riverine (Unknown)</div></li>
+                
+                <li><div class="copyable-data">Riverine (Unknown)</div></li>
+                
+                <li><div class="copyable-data">Riverine (Unknown)</div></li>
+                
+                <li><div class="copyable-data">Riverine (Unknown)</div></li>
+                
+            </ul>
+            
+            
+            
+            <div class="subsection-header">Regulatory Significance</div>
+            <ul class="requirement-list">
+                
+                <li>Impact Risk: Medium</li>
+                
+                <li>Found 6 wetlands within search radius</li>
+                
+            </ul>
+            
+            
+            
+            <div class="subsection-header">Development Guidance</div>
+            <ul class="requirement-list">
+                
+                <li>Conduct wetland assessment as part of environmental due diligence</li>
+                
+                <li>Consider wetland buffers in site planning and design</li>
+                
+                <li>📏 6 wetlands identified within 0.5-mile radius</li>
+                
+                <li>Use generated map for preliminary site planning</li>
+                
+                <li>Review local and state wetland regulations</li>
+                
+                <li>Detailed analysis results saved to logs/ directory</li>
+                
+                <li>High-resolution map generated for documentation</li>
+                
+                <li>Consult qualified environmental professionals for project-specific guidance</li>
+                
+            </ul>
+            
+            
+            <!-- Embedded Wetland Map -->
+            
+        </div>
+        
+        
+        <!-- Critical Habitat Analysis -->
+        
+        <div class="section">
+            <div class="section-header">6. Critical Habitat Analysis</div>
+            <table class="data-table">
+                <tr>
+                    <th>Within Designated Critical Habitat</th>
+                    <td>No</td>
+                </tr>
+                <tr>
+                    <th>Within Proposed Critical Habitat</th>
+                    <td>No</td>
+                </tr>
+                <tr>
+                    <th>Distance to Nearest Habitat</th>
+                    <td>7.098570642373573 miles</td>
+                </tr>
+            </table>
+            
+            
+            
+            
+            <div class="subsection-header">Affected Species</div>
+            <ul class="constraint-list">
+                
+                <li><div class="copyable-data">West Indian Manatee (Trichechus manatus)</div></li>
+                
+            </ul>
+            
+            
+            
+            <div class="subsection-header">Regulatory Implications</div>
+            <ul class="requirement-list">
+                
+                <li>ESA Consultation Required: False</li>
+                
+                <li>Impact Assessment Recommended: False</li>
+                
+                <li>Distance Category: Distant (> 5 miles, 7.1 miles)</li>
+                
+            </ul>
+            
+            
+            
+            <div class="subsection-header">Development Constraints</div>
+            <ul class="constraint-list">
+                
+                <li>Distant from critical habitat</li>
+                
+                <li>Direct critical habitat impacts unlikely</li>
+                
+                <li>Focus on local environmental compliance requirements</li>
+                
+                <li>Nearest habitat protects West Indian Manatee</li>
+                
+            </ul>
+            
+            
+            <!-- Embedded Critical Habitat Map -->
+            
+        </div>
+        
+        
+        <!-- Air Quality Analysis -->
+        
+        <div class="section">
+            <div class="section-header">7. Air Quality Analysis</div>
+            <table class="data-table">
+                <tr>
+                    <th>Nonattainment Status</th>
+                    <td>No</td>
+                </tr>
+                <tr>
+                    <th>Area Classification</th>
+                    <td>Compliant</td>
+                </tr>
+            </table>
+            
+            
+            
+            
+            <div class="subsection-header">Affected Pollutants</div>
+            <ul class="constraint-list">
+                
+                <li><div class="copyable-data">None - Meets all NAAQS</div></li>
+                
+            </ul>
+            
+            
+            
+            <div class="subsection-header">Regulatory Implications</div>
+            <ul class="requirement-list">
+                
+                <li>Compliance Status: Compliant</li>
+                
+                <li>Requirements: No additional Clean Air Act requirements</li>
+                
+                <li>Air Quality Status: Meets all National Ambient Air Quality Standards (NAAQS)</li>
+                
+            </ul>
+            
+            
+            <!-- Embedded Air Quality Map -->
+            
+        </div>
+        
+        
+        <!-- Environmental Constraints Summary -->
+        <div class="section">
+            <div class="section-header">8. Environmental Constraints Summary</div>
+            
+            <ul class="constraint-list">
+                
+                <li>Wetlands present within search radius</li>
+                
+            </ul>
+            
+        </div>
+        
+        <!-- Regulatory Requirements -->
+        <div class="section">
+            <div class="section-header">9. Key Regulatory Requirements</div>
+            
+            <ul class="requirement-list">
+                
+                <li>Outside Special Flood Hazard Area</li>
+                
+                <li>Standard building codes apply</li>
+                
+                <li>Impact Risk: Medium</li>
+                
+                <li>ESA Consultation Required: False</li>
+                
+                <li>Compliance Status: Compliant</li>
+                
+            </ul>
+            
+        </div>
+        
+        <!-- Recommendations -->
+        <div class="section">
+            <div class="section-header">10. Recommendations</div>
+            
+            <ul class="requirement-list">
+                
+                <li>Conduct detailed environmental due diligence prior to development</li>
+                
+                <li>Consult with relevant regulatory agencies early in planning process</li>
+                
+                <li>Consider environmental constraints in site design and engineering</li>
+                
+            </ul>
+            
+        </div>
+        
+        <!-- Environmental Compliance Checklist -->
+        <div class="section">
+            <div class="section-header">11. Environmental Compliance Checklist</div>
+            <table class="checklist-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Environmental Factor</th>
+                        <th style="width: 15%;">Status</th>
+                        <th style="width: 20%;">Risk Level</th>
+                        <th style="width: 25%;">Action Required</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Flood Zone -->
+                    <tr>
+                        <td><strong>Flood Zone Compliance</strong><br>
+                            
+                            Zone: X
+                            
+                        </td>
+                        <td class="status-green">COMPLIANT</td>
+                        <td class="status-green">LOW</td>
+                        <td>Standard construction practices</td>
+                    </tr>
+                    
+                    <!-- Wetlands -->
+                    <tr>
+                        <td><strong>Wetland Compliance</strong><br>
+                            
+                            On Property: No<br>
+                            Distance: 0.4 mi
+                            
+                        </td>
+                        <td class="status-yellow">REVIEW</td>
+                        <td class="status-yellow">MODERATE</td>
+                        <td>Wetland delineation study recommended, buffer considerations</td>
+                    </tr>
+                    
+                    <!-- Critical Habitat -->
+                    <tr>
+                        <td><strong>Critical Habitat / ESA</strong><br>
+                            
+                            Within Habitat: No<br>
+                            Distance: 7.098570642373573 mi
+                            
+                        </td>
+                        <td class="status-green">COMPLIANT</td>
+                        <td class="status-green">LOW</td>
+                        <td>No critical habitat concerns</td>
+                    </tr>
+                    
+                    <!-- Zoning -->
+                    <tr>
+                        <td><strong>Zoning Compliance</strong><br>
+                            
+                            Zoning: R-1<br>
+                            Land Use: Residencial de Baja Densidad Poblacional (Solar Mínimo de 900 mts cuadrados)
+                            
+                        </td>
+                        <td class="status-yellow">REVIEW</td>
+                        <td class="status-yellow">MODERATE</td>
+                        <td>Verify permitted uses and development restrictions</td>
+                    </tr>
+                    
+                    <!-- Air Quality -->
+                    <tr>
+                        <td><strong>Air Quality / Emissions</strong><br>
+                            
+                            Nonattainment: No<br>
+                            Classification: Compliant
+                            
+                        </td>
+                        <td class="status-green">COMPLIANT</td>
+                        <td class="status-green">LOW</td>
+                        <td>Standard air quality compliance</td>
+                    </tr>
+                    
+                    <!-- Karst -->
+                    <tr>
+                        <td><strong>Karst / Geological</strong><br>
+                            
+                            No karst data available
+                            
+                        </td>
+                        <td class="status-green">COMPLIANT</td>
+                        <td class="status-green">LOW</td>
+                        <td>No immediate karst-related concerns based on available data.</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div style="margin-top: 15px; font-size: 11px;">
+                <strong>Legend:</strong> 
+                <span class="risk-badge risk-low">GREEN</span> = Compliant/Low Risk | 
+                <span class="risk-badge risk-moderate">YELLOW</span> = Review Required | 
+                <span class="risk-badge risk-high">RED</span> = Consultation/Permit Required
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ccc; text-align: center; font-size: 10px; color: #666;">
+            <p>This report was generated automatically based on available environmental data.</p>
+            <p>Consult with qualified environmental professionals for project-specific guidance.</p>
+        </div>
+    </div>
+</body>
+</html> 

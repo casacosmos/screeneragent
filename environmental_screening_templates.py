@@ -508,91 +508,6 @@ Please create comprehensive documentation package with all maps and supporting r
         return template
 
 # =============================================================================
-# RESPONSE PROCESSING TEMPLATES
-# =============================================================================
-
-class ResponseProcessingTemplates:
-    """Templates for processing agent responses and extracting information"""
-    
-    @staticmethod
-    def extract_project_info(agent_response: str) -> Dict[str, Any]:
-        """Template for extracting project information from agent response"""
-        # This would contain regex patterns or NLP logic to extract:
-        return {
-            "project_directory": "output/Project_Name_YYYY-MM-DD_at_HH.MM.SS",
-            "project_name": "Extracted Project Name",
-            "cadastral_number": "XXX-XXX-XXX-XX",
-            "coordinates": [-66.2097, 18.4154],
-            "location": "Municipality, Puerto Rico",
-            "analysis_date": "YYYY-MM-DD HH:MM:SS"
-        }
-    
-    @staticmethod
-    def extract_environmental_findings(agent_response: str) -> Dict[str, Any]:
-        """Template for extracting environmental findings"""
-        return {
-            "property": {
-                "area_acres": 0.0,
-                "land_use": "",
-                "zoning": "",
-                "development_potential": ""
-            },
-            "flood": {
-                "flood_zone": "",
-                "risk_level": "",
-                "insurance_required": False
-            },
-            "wetland": {
-                "on_property": False,
-                "nearby": False,
-                "distance_miles": 0.0
-            },
-            "habitat": {
-                "within_habitat": False,
-                "species_affected": [],
-                "consultation_required": False
-            },
-            "air_quality": {
-                "meets_standards": True,
-                "nonattainment": False
-            },
-            "karst": {
-                "within_karst": False,
-                "nearby_karst": False,
-                "regulatory_impact": ""
-            }
-        }
-    
-    @staticmethod
-    def extract_generated_files(agent_response: str) -> Dict[str, List[str]]:
-        """Template for extracting information about generated files"""
-        return {
-            "comprehensive_reports": [
-                "comprehensive_screening_report_*.json",
-                "comprehensive_screening_report_*.md", 
-                "comprehensive_screening_report_*.pdf"
-            ],
-            "maps": [
-                "wetland_map_*.pdf",
-                "critical_habitat_map_*.pdf", 
-                "nonattainment_map_*.pdf"
-            ],
-            "flood_reports": [
-                "firmette_*.pdf",
-                "preliminary_comparison_*.pdf",
-                "abfe_map_*.pdf",
-                "comprehensive_flood_report_*.pdf"
-            ],
-            "data_files": [
-                "cadastral_search_*.json",
-                "panel_info_*.json",
-                "wetland_summary_*.json",
-                "critical_habitat_analysis_*.json",
-                "nonattainment_analysis_*.json"
-            ]
-        }
-
-# =============================================================================
 # EXAMPLE USAGE FUNCTIONS
 # =============================================================================
 
@@ -716,5 +631,4 @@ if __name__ == "__main__":
     print("   • UIComponentTemplates for forms/results")
     print("   • AgentPromptTemplates for commands")
     print("   • CommandTemplates for common scenarios") 
-    print("   • ResponseProcessingTemplates for parsing")
     print("   • AutomatedReportConfig for agent prompts") 

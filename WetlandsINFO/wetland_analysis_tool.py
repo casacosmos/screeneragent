@@ -30,8 +30,7 @@ from langchain_core.tools import tool
 from query_wetland_location import WetlandLocationAnalyzer, save_results_to_file
 from generate_wetland_map_pdf_v3 import WetlandMapGeneratorV3
 
-# Ensure output directory exists
-os.makedirs('output', exist_ok=True)
+# Note: Output directory management is handled by the output_directory_manager
 
 class WetlandAnalysisInput(BaseModel):
     """Input schema for comprehensive wetland analysis"""

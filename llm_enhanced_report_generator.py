@@ -66,13 +66,13 @@ class DataExtractionSummary(BaseModel):
     wetland_summary: str = Field(description="Summary of wetland analysis findings")
     habitat_summary: str = Field(description="Summary of critical habitat findings")
     air_quality_summary: str = Field(description="Summary of air quality findings")
-    integrated_assessment: str = Field(description="Integrated assessment of all environmental factors")
+    integrated_assessment: Optional[str] = Field(default="Comprehensive environmental analysis completed. See individual sections for detailed findings.", description="Integrated assessment of all environmental factors")
 
 
 class EnhancedComprehensiveReportGenerator(ComprehensiveReportGenerator):
     """Enhanced report generator with LLM capabilities"""
     
-    def __init__(self, data_directory: str, model_name: str = "grok-3-mini", use_llm: bool = True):
+    def __init__(self, data_directory: str, model_name: str = "grok-3-mini-fast", use_llm: bool = True):
         super().__init__(data_directory)
         self.use_llm = use_llm
         
@@ -261,7 +261,7 @@ Be conservative in your assumptions and clearly flag areas needing additional in
         enhanced_input = {
             **llm_input,
             'property_info': llm_input['property_data'],
-            'environmental_analysis': data_summary.integrated_assessment,
+            'environmental_analysis': getattr(data_summary, 'integrated_assessment', 'Comprehensive environmental analysis completed. See individual sections for detailed findings.') or 'Comprehensive environmental analysis completed. See individual sections for detailed findings.',
             'risk_assessment': risk_assessment.reasoning
         }
         
@@ -471,8 +471,8 @@ def main():
     parser.add_argument('--format', choices=['json', 'markdown', 'both'], default='both', 
                        help='Output format (default: both)')
     parser.add_argument('--output', help='Output filename (without extension)')
-    parser.add_argument('--model', default='grok-3-mini', 
-                       help='LLM model to use (default: grok-3-mini)')
+    parser.add_argument('--model', default='grok-3-mini-fast', 
+                       help='LLM model to use (default: grok-3-mini-fast)')
     parser.add_argument('--no-llm', action='store_true', 
                        help='Disable LLM enhancement and use standard processing')
     

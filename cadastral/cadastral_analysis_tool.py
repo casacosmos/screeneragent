@@ -33,8 +33,7 @@ from .cadastral_search import MIPRCadastralSearch
 from map_generator import MIPRMapGenerator
 from .cadastral_utils import CadastralDataProcessor
 
-# Ensure output directory exists
-os.makedirs('output', exist_ok=True)
+# Note: Output directory management is handled by the output_directory_manager
 
 class CadastralAnalysisInput(BaseModel):
     """Input schema for comprehensive cadastral analysis"""

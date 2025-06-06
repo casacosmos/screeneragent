@@ -10,10 +10,13 @@ detailed information about air quality standards violations.
 import requests
 import json
 import logging
+import os
+import sys
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 import time
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -551,6 +554,208 @@ class NonAttainmentAreasClient:
             )
         
         return recommendations
+    
+    def save_nonattainment_data(self, analysis_result: NonAttainmentAnalysisResult,
+                               filename: str = None,
+                               use_output_manager: bool = True) -> bool:
+        """
+        Save nonattainment analysis data to file using output directory manager
+        
+        Args:
+            analysis_result: NonAttainmentAnalysisResult object with analysis results
+            filename: Optional filename (auto-generated if not provided)
+            use_output_manager: Whether to use output directory manager (default: True)
+            
+        Returns:
+            True if save successful, False otherwise
+        """
+        try:
+            # Prepare data for serialization
+            save_data = {
+                'analysis_timestamp': analysis_result.analysis_timestamp,
+                'location': {
+                    'longitude': analysis_result.location[0],
+                    'latitude': analysis_result.location[1]
+                },
+                'query_success': analysis_result.query_success,
+                'error_message': analysis_result.error_message,
+                'summary': {
+                    'has_nonattainment_areas': analysis_result.has_nonattainment_areas,
+                    'area_count': analysis_result.area_count
+                },
+                'nonattainment_areas': [
+                    {
+                        'pollutant_name': area.pollutant_name,
+                        'area_name': area.area_name,
+                        'state_name': area.state_name,
+                        'state_abbreviation': area.state_abbreviation,
+                        'epa_region': area.epa_region,
+                        'current_status': area.current_status,
+                        'classification': area.classification,
+                        'designation_effective_date': area.designation_effective_date,
+                        'statutory_attainment_date': area.statutory_attainment_date,
+                        'design_value': area.design_value,
+                        'design_value_units': area.design_value_units,
+                        'meets_naaqs': area.meets_naaqs,
+                        'population_2020': area.population_2020,
+                        'composite_id': area.composite_id
+                    } for area in analysis_result.nonattainment_areas
+                ]
+            }
+            
+            if use_output_manager:
+                # Use output directory manager to get proper file path
+                output_manager = get_output_manager()
+                
+                if not filename:
+                    lon, lat = analysis_result.location
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"nonattainment_analysis_{lon}_{lat}_{timestamp}.json"
+                
+                # Get the file path using output manager
+                file_path = output_manager.get_file_path(filename, "data")
+                
+                # Save the data
+                with open(file_path, 'w') as f:
+                    json.dump(save_data, f, indent=2, default=str)
+                
+                logger.info(f"Nonattainment data saved to: {file_path}")
+                return True
+            else:
+                # Fallback to current directory
+                if not filename:
+                    lon, lat = analysis_result.location
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"nonattainment_analysis_{lon}_{lat}_{timestamp}.json"
+                
+                with open(filename, 'w') as f:
+                    json.dump(save_data, f, indent=2, default=str)
+                
+                logger.info(f"Nonattainment data saved to: {filename}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to save nonattainment data: {e}")
+            return False
+    
+    def export_nonattainment_summary_report(self, analysis_result: NonAttainmentAnalysisResult,
+                                           filename: str = None,
+                                           use_output_manager: bool = True) -> bool:
+        """
+        Export a human-readable summary report of nonattainment data
+        
+        Args:
+            analysis_result: NonAttainmentAnalysisResult object with analysis results
+            filename: Optional filename (auto-generated if not provided)
+            use_output_manager: Whether to use output directory manager (default: True)
+            
+        Returns:
+            True if export successful, False otherwise
+        """
+        try:
+            # Generate report content
+            lon, lat = analysis_result.location
+            report_lines = [
+                "NONATTAINMENT AREAS ANALYSIS REPORT",
+                "=" * 50,
+                f"Location: {lat:.6f}°N, {lon:.6f}°W",
+                f"Analysis Date: {analysis_result.analysis_timestamp}",
+                "",
+                "SUMMARY",
+                "-" * 20,
+            ]
+            
+            if not analysis_result.query_success:
+                report_lines.extend([
+                    "❌ Analysis failed",
+                    f"Error: {analysis_result.error_message or 'Unknown error'}",
+                    ""
+                ])
+            elif not analysis_result.has_nonattainment_areas:
+                report_lines.extend([
+                    "✅ No nonattainment areas found at this location",
+                    "This location appears to be in compliance with National Ambient Air Quality Standards (NAAQS).",
+                    ""
+                ])
+            else:
+                # Get summary statistics
+                nonattainment_count = len([area for area in analysis_result.nonattainment_areas 
+                                         if area.current_status == 'Nonattainment'])
+                maintenance_count = len([area for area in analysis_result.nonattainment_areas 
+                                       if area.current_status == 'Maintenance'])
+                pollutants = list(set(area.pollutant_name for area in analysis_result.nonattainment_areas))
+                
+                report_lines.extend([
+                    f"⚠️  NONATTAINMENT AREAS DETECTED",
+                    f"Total Areas Found: {analysis_result.area_count}",
+                    f"Active Nonattainment Areas: {nonattainment_count}",
+                    f"Maintenance Areas: {maintenance_count}",
+                    f"Pollutants Affected: {len(pollutants)}",
+                    f"Pollutant Types: {', '.join(pollutants)}",
+                    "",
+                    "AREA DETAILS",
+                    "-" * 20
+                ])
+                
+                for i, area in enumerate(analysis_result.nonattainment_areas, 1):
+                    status_icon = "🚫" if area.current_status == 'Nonattainment' else "🔧"
+                    report_lines.extend([
+                        f"{i}. {status_icon} {area.area_name}",
+                        f"   Pollutant: {area.pollutant_name}",
+                        f"   Status: {area.current_status}",
+                        f"   Classification: {area.classification}",
+                        f"   State: {area.state_name} (EPA Region {area.epa_region})",
+                        f"   Design Value: {area.design_value or 'N/A'} {area.design_value_units or ''}",
+                        f"   Meets NAAQS: {area.meets_naaqs or 'N/A'}",
+                        ""
+                    ])
+                
+                # Add recommendations
+                summary = self.get_area_summary(analysis_result)
+                if 'recommendations' in summary:
+                    report_lines.extend([
+                        "RECOMMENDATIONS",
+                        "-" * 20
+                    ])
+                    for rec in summary['recommendations']:
+                        report_lines.append(f"• {rec}")
+                        report_lines.append("")
+            
+            # Save the report
+            report_content = "\n".join(report_lines)
+            
+            if use_output_manager:
+                # Use output directory manager to get proper file path
+                output_manager = get_output_manager()
+                
+                if not filename:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"nonattainment_report_{lon}_{lat}_{timestamp}.txt"
+                
+                # Get the file path using output manager
+                file_path = output_manager.get_file_path(filename, "reports")
+                
+                # Save the report
+                with open(file_path, 'w') as f:
+                    f.write(report_content)
+                
+                logger.info(f"Nonattainment report saved to: {file_path}")
+                return True
+            else:
+                # Fallback to current directory
+                if not filename:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"nonattainment_report_{lon}_{lat}_{timestamp}.txt"
+                
+                with open(filename, 'w') as f:
+                    f.write(report_content)
+                
+                logger.info(f"Nonattainment report saved to: {filename}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to export nonattainment report: {e}")
+            return False
 
 # Import math for buffer calculations
 import math 

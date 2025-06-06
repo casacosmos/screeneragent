@@ -10,9 +10,15 @@ import requests
 import json
 import time
 import math
+import os
+import sys
 from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
+
+# Add parent directory to path to import output_directory_manager
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from output_directory_manager import get_output_manager
 
 
 @dataclass
@@ -170,6 +176,8 @@ class FEMAPreliminaryComparisonClient:
         
         job_url = f"{self.service_url}/jobs/{job_id}"
         start_time = time.time()
+        result_extraction_attempts = 0
+        max_result_attempts = 3  # Limit attempts to extract results
         
         print(f"⏳ Polling job {job_id} for completion...")
         
@@ -184,6 +192,8 @@ class FEMAPreliminaryComparisonClient:
                     print(f"📊 Job status: {job_status}")
                     
                     if job_status == 'esriJobSucceeded':
+                        result_extraction_attempts += 1
+                        
                         # Get the result - try different result parameter names
                         result_urls_to_try = [
                             f"{job_url}/results/OutputFile?f=json",
@@ -217,7 +227,16 @@ class FEMAPreliminaryComparisonClient:
                                 print(f"⚠️  Failed to get result from {result_url}: HTTP {result_response.status_code}")
                         
                         # If we get here, we couldn't extract the URL from results
-                        print(f"⚠️  Could not extract PDF URL from job results")
+                        print(f"⚠️  Could not extract PDF URL from job results (attempt {result_extraction_attempts}/{max_result_attempts})")
+                        
+                        # If we've tried multiple times to extract results, give up
+                        if result_extraction_attempts >= max_result_attempts:
+                            print(f"❌ Failed to extract PDF URL after {max_result_attempts} attempts. Job succeeded but results are not accessible.")
+                            return None
+                        
+                        # Wait before retrying result extraction
+                        time.sleep(interval)
+                        continue
                     
                     elif job_status in ['esriJobFailed', 'esriJobCancelled', 'esriJobTimedOut']:
                         print(f"❌ Job failed with status: {job_status}")
@@ -288,40 +307,61 @@ class FEMAPreliminaryComparisonClient:
             print(f"⚠️  Error extracting output file URL: {e}")
             return None
     
-    def download_comparison_report(self, download_url: str, filename: str = None) -> bool:
+    def download_comparison_report(self, download_url: str, filename: str = None, use_output_manager: bool = True) -> bool:
         """
         Download the Preliminary Comparison report from the provided URL
         
         Args:
             download_url: URL to download the report from
-            filename: Local filename to save to (optional)
+            filename: Local filename to save to (optional) - if not provided, will auto-generate
+            use_output_manager: Whether to use the output directory manager (default: True)
             
         Returns:
             True if download successful, False otherwise
         """
         
-        if not filename:
-            # Generate filename from timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"preliminary_comparison_{timestamp}.pdf"
-        
         try:
+            if use_output_manager:
+                # Use output directory manager to get proper file path
+                output_manager = get_output_manager()
+                
+                if not filename:
+                    # Generate filename from timestamp
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"preliminary_comparison_{timestamp}.pdf"
+                
+                # Get file path in the reports subdirectory
+                file_path = output_manager.get_file_path(filename, "reports")
+                print(f"📁 Saving Preliminary Comparison report to project directory: {file_path}")
+                
+            else:
+                # Legacy behavior - save to current directory or specified path
+                if not filename:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"preliminary_comparison_{timestamp}.pdf"
+                file_path = filename
+                print(f"💾 Saving Preliminary Comparison report to: {file_path}")
+            
             response = self.session.get(download_url, timeout=60)
             response.raise_for_status()
             
-            with open(filename, 'wb') as f:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            with open(file_path, 'wb') as f:
                 f.write(response.content)
             
-            print(f"Preliminary Comparison report downloaded successfully: {filename}")
+            print(f"✅ Preliminary Comparison report downloaded successfully: {file_path}")
             return True
             
         except Exception as e:
-            print(f"Error downloading Preliminary Comparison report: {e}")
+            print(f"❌ Error downloading Preliminary Comparison report: {e}")
             return False
     
     def generate_and_download_comparison(self, longitude: float, latitude: float,
                                        location_name: str = None,
-                                       filename: str = None) -> Tuple[bool, str]:
+                                       filename: str = None,
+                                       use_output_manager: bool = True) -> Tuple[bool, str]:
         """
         Generate and download a Preliminary Comparison report in one operation
         
@@ -330,12 +370,13 @@ class FEMAPreliminaryComparisonClient:
             latitude: Latitude coordinate
             location_name: Optional name for the location
             filename: Local filename to save to (optional)
+            use_output_manager: Whether to use the output directory manager (default: True)
             
         Returns:
             Tuple of (success, message)
         """
         
-        print(f"Generating Preliminary Comparison report for coordinates: {latitude}, {longitude}")
+        print(f"📊 Generating Preliminary Comparison report for coordinates: {latitude}, {longitude}")
         
         # Generate the report
         success, result, job_id = self.generate_comparison_report(
@@ -350,11 +391,11 @@ class FEMAPreliminaryComparisonClient:
         if not result:
             return False, "No download URL received"
         
-        print(f"Preliminary Comparison report generated successfully. Job ID: {job_id}")
-        print(f"Download URL: {result}")
+        print(f"✅ Preliminary Comparison report generated successfully. Job ID: {job_id}")
+        print(f"🔗 Download URL: {result}")
         
-        # Download the file
-        if self.download_comparison_report(result, filename):
+        # Download the file using output directory manager
+        if self.download_comparison_report(result, filename, use_output_manager):
             return True, f"Preliminary Comparison report generated and downloaded successfully"
         else:
             return False, "Report generated but download failed"

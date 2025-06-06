@@ -37,11 +37,20 @@ from comprehensive_report_generator import ComprehensiveReportGenerator
 
 # Import PDF generator
 try:
-    from pdf_report_generator import ScreeningPDFGenerator
+    from pdf_report_generator import ScreeningPDFGenerator, StructuredPDFGenerator, STRUCTURED_OUTPUT_AVAILABLE
     PDF_AVAILABLE = True
 except ImportError:
     print("⚠️ Warning: PDF generation not available - install reportlab pillow")
     PDF_AVAILABLE = False
+    STRUCTURED_OUTPUT_AVAILABLE = False
+
+# Import HTML-based PDF generator
+try:
+    from html_pdf_generator import HTMLEnvironmentalPDFGenerator
+    HTML_PDF_AVAILABLE = True
+except ImportError:
+    print("⚠️ Warning: HTML PDF generation not available - install jinja2 weasyprint")
+    HTML_PDF_AVAILABLE = False
 
 # Pydantic input models for LangChain tools
 class ScreeningReportInput(BaseModel):
@@ -50,8 +59,9 @@ class ScreeningReportInput(BaseModel):
     output_format: str = Field(default="both", description="Output format: 'json', 'markdown', 'both'")
     custom_filename: Optional[str] = Field(default=None, description="Custom filename for reports (without extension)")
     include_pdf: bool = Field(default=True, description="Whether to generate PDF report with embedded maps")
+    use_professional_html_pdf: bool = Field(default=True, description="Use professional HTML-based PDF generator with compliance checklist")
     use_llm: bool = Field(default=True, description="Whether to use LLM enhancement for analysis")
-    model_name: str = Field(default="grok-3-mini", description="LLM model to use for enhancement")
+    model_name: str = Field(default="grok-3-mini-fast", description="LLM model to use for enhanced analysis")
 
 class AutoDiscoveryInput(BaseModel):
     """Input schema for auto-discovery batch processing"""
@@ -59,21 +69,41 @@ class AutoDiscoveryInput(BaseModel):
     output_format: str = Field(default="both", description="Output format: 'json', 'markdown', 'both'")
     include_pdf: bool = Field(default=True, description="Whether to generate PDF reports with embedded maps")
     use_llm: bool = Field(default=True, description="Whether to use LLM enhancement for analysis")
-    model_name: str = Field(default="grok-3-mini", description="LLM model to use for enhancement")
+    model_name: str = Field(default="grok-3-mini-fast", description="LLM model to use for enhancement")
 
 class ScreeningReportTool:
     """Tool for generating comprehensive reports from screening output directories"""
     
-    def __init__(self, output_directory: str, use_llm: bool = True, model_name: str = "grok-3-mini"):
+    def __init__(self, output_directory: str, output_format: str = "both", 
+                 custom_filename: Optional[str] = None, include_pdf: bool = True,
+                 use_professional_html_pdf: bool = True, use_llm: bool = True, 
+                 model_name: str = "grok-3-mini-fast"):
+        """
+        Initialize the comprehensive screening report generator.
+        
+        Args:
+            output_directory: Path to the screening output directory
+            output_format: Format to generate ('json', 'markdown', 'both')
+            custom_filename: Custom filename for reports (optional)
+            include_pdf: Whether to generate PDF with embedded maps (ALWAYS FORCED TO TRUE)
+            use_professional_html_pdf: Use professional HTML-based PDF generator with compliance checklist
+            use_llm: Whether to use LLM enhancement for analysis
+            model_name: LLM model to use for enhancement
+        """
         self.output_directory = Path(output_directory).resolve()
-        self.data_directory = self.output_directory / "data"
-        self.use_llm = use_llm and LLM_AVAILABLE
+        self.output_format = output_format
+        self.custom_filename = custom_filename
+        self.include_pdf = True  # ALWAYS TRUE - PDF generation is mandatory
+        self.use_professional_html_pdf = use_professional_html_pdf
+        self.use_llm = use_llm
         self.model_name = model_name
         
-        # Validate directory structure
-        self._validate_directory_structure()
+        # Initialize the data directory and report generator
+        self.data_directory = self.output_directory / "data"
+        if not self.data_directory.exists():
+            raise ValueError(f"Data directory not found: {self.data_directory}")
         
-        # Initialize appropriate generator
+        # Initialize the appropriate report generator
         self._initialize_generator()
     
     def _validate_directory_structure(self):
@@ -171,44 +201,170 @@ class ScreeningReportTool:
             # MANDATORY PDF GENERATION - Always attempt to generate PDF
             pdf_generation_attempted = False
             if include_pdf:
-                if PDF_AVAILABLE:
+                # Try Professional HTML-based PDF generation first (if enabled)
+                if self.use_professional_html_pdf and HTML_PDF_AVAILABLE and json_file:
                     try:
-                        print(f"📄 Generating MANDATORY PDF report...")
-                        pdf_generator = ScreeningPDFGenerator(
-                            output_directory=str(self.output_directory),
-                            use_llm=self.use_llm,
-                            model_name=getattr(self, 'model_name', 'grok-3-mini')
+                        print(f"📄 Generating professional HTML-based PDF report...")
+                        
+                        html_pdf_generator = HTMLEnvironmentalPDFGenerator(
+                            json_report_path=str(json_file),
+                            project_directory=str(self.output_directory)
                         )
                         
-                        pdf_filename = f"{custom_filename}.pdf"
-                        # PDF generator will save directly to the reports directory
-                        pdf_file = pdf_generator.generate_pdf_report(pdf_filename)
-                        output_files['pdf'] = pdf_file
-                        print(f"✅ PDF report generated: {pdf_file}")
+                        # Generate professional PDF with compliance checklist
+                        professional_pdf_path = html_pdf_generator.generate_pdf_report()
+                        print(f"✅ Professional PDF with compliance checklist generated: {professional_pdf_path}")
+                        
+                        output_files['pdf'] = professional_pdf_path
                         pdf_generation_attempted = True
                         
                     except Exception as e:
-                        print(f"❌ PDF generation failed: {e}")
-                        print("⚠️ PDF generation is MANDATORY - this is a critical error")
-                        # Still continue with other reports but flag the issue
-                        output_files['pdf_error'] = f"PDF generation failed: {str(e)}"
+                        print(f"⚠️ Professional HTML PDF generation failed: {e}")
+                        print("Falling back to standard PDF generation...")
+                
+                # Fallback to standard PDF generation
+                if not pdf_generation_attempted and PDF_AVAILABLE:
+                    try:
+                        print(f"📄 Generating standard PDF report...")
+                        
+                        # Check if we can use structured PDF generation
+                        # Try to use structured PDF generation if we have enhanced data
+                        structured_pdf_generated = False
+                        if (STRUCTURED_OUTPUT_AVAILABLE and 
+                            hasattr(self.generator, 'extract_with_llm_enhancement') and 
+                            self.use_llm):
+                            
+                            try:
+                                # Try structured approach if available
+                                enhanced_data = self.generator.extract_with_llm_enhancement()
+                                if enhanced_data:
+                                    structured_generator = StructuredPDFGenerator(
+                                        structured_data=enhanced_data.__dict__ if hasattr(enhanced_data, '__dict__') else enhanced_data,
+                                        project_directory=str(self.output_directory),
+                                        use_llm=self.use_llm
+                                    )
+                                    structured_pdf_path = structured_generator.generate_sophisticated_pdf_report()
+                                    output_files['pdf'] = structured_pdf_path
+                                    structured_pdf_generated = True
+                                    print(f"✅ Structured PDF generated: {structured_pdf_path}")
+                            except Exception as e:
+                                print(f"⚠️ Structured PDF generation failed: {e}, using standard approach")
+                        
+                        # Standard PDF generation if structured failed
+                        if not structured_pdf_generated:
+                            pdf_generator = ScreeningPDFGenerator(
+                                output_directory=str(self.output_directory),
+                                use_llm=self.use_llm,
+                                model_name=self.model_name
+                            )
+                            standard_pdf_path = pdf_generator.generate_pdf_report()
+                            output_files['pdf'] = standard_pdf_path
+                            print(f"✅ Standard PDF generated: {standard_pdf_path}")
+                        
                         pdf_generation_attempted = True
+                        
+                    except Exception as e:
+                        print(f"⚠️ Standard PDF generation failed: {e}")
+                
+                # Final fallback message
+                if not pdf_generation_attempted:
+                    print("❌ All PDF generation methods failed")
+                    print("📄 Comprehensive JSON and Markdown reports are available")
+                    if not PDF_AVAILABLE and not HTML_PDF_AVAILABLE:
+                        print("💡 To enable PDF generation, install:")
+                        print("   Standard PDF: pip install reportlab pillow PyPDF2")
+                        print("   Professional PDF: pip install jinja2 weasyprint")
                 else:
-                    print("❌ PDF generation not available - install reportlab pillow")
-                    print("⚠️ PDF generation is MANDATORY - missing dependencies")
-                    output_files['pdf_error'] = "PDF generation not available - missing dependencies (reportlab pillow)"
-                    pdf_generation_attempted = True
+                    print(f"📄 PDF generation completed successfully")
+            else:
+                print("📄 PDF generation skipped (include_pdf=False)")
             
-            # Ensure PDF generation was attempted
-            if not pdf_generation_attempted:
-                print("❌ CRITICAL ERROR: PDF generation was not attempted but is MANDATORY")
-                output_files['pdf_error'] = "PDF generation was not attempted"
+            # Ensure at least one report format was generated
+            if not json_file and not md_file and 'pdf' not in output_files:
+                raise Exception("No reports were generated successfully")
             
             return output_files
             
         except Exception as e:
             print(f"❌ Error generating reports: {e}")
             raise
+    
+    def _create_structured_data_for_pdf(self, enhanced_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create structured data dictionary for sophisticated PDF generation"""
+        
+        # Helper function to safely convert dataclass to dict
+        def safe_to_dict(obj):
+            if obj is None:
+                return None
+            if hasattr(obj, '__dict__'):
+                return {k: v for k, v in obj.__dict__.items()}
+            return obj
+        
+        structured_data = {
+            'success': True,
+            'project_name': getattr(enhanced_data.get('project_info'), 'project_name', 'Environmental Screening Project'),
+            'project_directory': str(self.output_directory),
+            'screening_datetime_utc': datetime.now().isoformat(),
+        }
+        
+        # Extract project information
+        project_info = enhanced_data.get('project_info')
+        if project_info:
+            structured_data.update({
+                'project_input_location_description': f"Cadastral {', '.join(project_info.cadastral_numbers)}" if hasattr(project_info, 'cadastral_numbers') and project_info.cadastral_numbers else "Location analysis",
+                'project_input_coordinates_lng_lat': [project_info.longitude, project_info.latitude] if hasattr(project_info, 'longitude') and hasattr(project_info, 'latitude') else None
+            })
+        
+        # Convert analysis sections to structured format
+        analysis_sections = ['cadastral_analysis', 'flood_analysis', 'wetland_analysis', 'critical_habitat_analysis', 'air_quality_analysis', 'karst_analysis']
+        
+        for section in analysis_sections:
+            section_data = enhanced_data.get(section)
+            if section_data:
+                structured_data[section] = safe_to_dict(section_data)
+        
+        # Add comprehensive report paths if available
+        comprehensive_reports = {}
+        reports_dir = self.output_directory / "reports"
+        
+        # Look for generated comprehensive reports
+        for report_file in reports_dir.glob("comprehensive_screening_report_*.json"):
+            comprehensive_reports['json_report'] = f"reports/{report_file.name}"
+            break
+            
+        for report_file in reports_dir.glob("comprehensive_screening_report_*.md"):
+            comprehensive_reports['markdown'] = f"reports/{report_file.name}"
+            break
+        
+        if comprehensive_reports:
+            structured_data['comprehensive_reports'] = comprehensive_reports
+        
+        # Extract maps from the directories
+        maps_other = []
+        maps_dir = self.output_directory / "maps"
+        if maps_dir.exists():
+            for map_file in maps_dir.glob("*.pdf"):
+                maps_other.append(f"maps/{map_file.name}")
+        
+        if maps_other:
+            structured_data['maps_generated_other'] = maps_other
+        
+        # Extract executive summary components if available
+        if enhanced_data.get('executive_summary'):
+            exec_summary = enhanced_data['executive_summary']
+            if hasattr(exec_summary, 'key_environmental_constraints'):
+                structured_data['environmental_constraints_summary'] = exec_summary.key_environmental_constraints
+            if hasattr(exec_summary, 'primary_recommendations'):
+                structured_data['agent_recommendations'] = exec_summary.primary_recommendations
+        
+        # Extract risk assessment if available
+        if enhanced_data.get('enhanced_risk'):
+            risk = enhanced_data['enhanced_risk']
+            structured_data['overall_risk_level_assessment'] = getattr(risk, 'risk_level', 'Not assessed')
+            structured_data['key_regulatory_requirements_identified'] = getattr(risk, 'regulatory_concerns', [])
+            structured_data['narrative_summary_of_findings'] = getattr(risk, 'reasoning', '')
+        
+        return structured_data
     
     def display_summary(self):
         """Display a summary of the screening analysis"""
@@ -399,8 +555,8 @@ Examples:
     parser.add_argument('--format', choices=['json', 'markdown', 'both'], default='both',
                        help='Output format (default: both)')
     parser.add_argument('--output', help='Custom output filename (without extension)')
-    parser.add_argument('--model', default='grok-3-mini',
-                       help='LLM model to use for enhanced processing (default: grok-3-mini)')
+    parser.add_argument('--model', default='grok-3-mini-fast',
+                       help='LLM model to use for enhanced processing (default: grok-3-mini-fast)')
     parser.add_argument('--no-llm', action='store_true',
                        help='Disable LLM enhancement and use standard processing')
     parser.add_argument('--no-pdf', action='store_true',
@@ -480,8 +636,9 @@ def generate_comprehensive_screening_report(
     output_format: str = "both",
     custom_filename: Optional[str] = None,
     include_pdf: bool = True,
+    use_professional_html_pdf: bool = True,
     use_llm: bool = True,
-    model_name: str = "grok-3-mini"
+    model_name: str = "grok-3-mini-fast"
 ) -> Dict[str, Any]:
     """
     Generate comprehensive environmental screening reports from screening output directory.
@@ -504,6 +661,7 @@ def generate_comprehensive_screening_report(
         output_format: Output format ('json', 'markdown', 'both')
         custom_filename: Custom filename for reports (optional)
         include_pdf: Whether to generate PDF with embedded maps (ALWAYS FORCED TO TRUE)
+        use_professional_html_pdf: Use professional HTML-based PDF generator with compliance checklist
         use_llm: Whether to use LLM enhancement for analysis
         model_name: LLM model to use for enhancement
         
@@ -622,7 +780,7 @@ def auto_discover_and_generate_reports(
     output_format: str = "both", 
     include_pdf: bool = True,
     use_llm: bool = True,
-    model_name: str = "grok-3-mini"
+    model_name: str = "grok-3-mini-fast"
 ) -> Dict[str, Any]:
     """
     Auto-discover screening directories and generate comprehensive reports for all projects.

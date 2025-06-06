@@ -4,8 +4,7 @@ Comprehensive FEMA Flood Tool for LangGraph Agents
 
 This module provides a single comprehensive tool that:
 1. Generates all three FEMA reports (FIRMette, Preliminary Comparison, ABFE)
-2. Automatically merges all generated PDFs into a single comprehensive report
-3. Retrieves detailed flood information including:
+2. Retrieves detailed flood information including:
    - Floodplain information
    - FIRM panel details
    - Flood zone designations
@@ -24,26 +23,14 @@ from pydantic.v1 import BaseModel, Field
 import asyncio
 import concurrent.futures
 
-# PDF merging imports
-try:
-    from PyPDF2 import PdfMerger, PdfReader
-    PDF_MERGE_AVAILABLE = True
-except ImportError:
-    try:
-        from pypdf import PdfMerger, PdfReader
-        PDF_MERGE_AVAILABLE = True
-    except ImportError:
-        PDF_MERGE_AVAILABLE = False
-        print("⚠️  PDF merging not available - install PyPDF2 or pypdf for PDF merging functionality")
-
 # Add FloodINFO to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'FloodINFO'))
 
 from langchain_core.tools import tool
-from query_coordinates_data import query_coordinate_data, save_results_to_file, extract_panel_information
-from firmette_client import FEMAFIRMetteClient
-from preliminary_comparison_client import FEMAPreliminaryComparisonClient
-from abfe_client import FEMAABFEClient
+from FloodINFO.query_coordinates_data import query_coordinate_data, save_results_to_file, extract_panel_information
+from FloodINFO.firmette_client import FEMAFIRMetteClient
+from FloodINFO.preliminary_comparison_client import FEMAPreliminaryComparisonClient
+from FloodINFO.abfe_client import FEMAABFEClient
 from output_directory_manager import get_output_manager
 
 # Remove the old output directory creation
@@ -56,7 +43,6 @@ class ComprehensiveFloodInput(BaseModel):
     location_name: Optional[str] = Field(default=None, description="Optional descriptive name for the location (e.g., 'Cataño, Puerto Rico')")
     generate_reports: bool = Field(default=True, description="Whether to generate PDF reports (FIRMette, Preliminary Comparison, ABFE)")
     include_abfe: bool = Field(default=True, description="Whether to include ABFE data (may not be available for all locations)")
-    merge_pdfs: bool = Field(default=True, description="Whether to merge all generated PDFs into a single comprehensive report")
 
 # FloodInformation class removed - not needed for tool definition
 
@@ -66,8 +52,7 @@ def comprehensive_flood_analysis(
     latitude: float, 
     location_name: Optional[str] = None,
     generate_reports: bool = True,
-    include_abfe: bool = True,
-    merge_pdfs: bool = True
+    include_abfe: bool = True
 ) -> Dict[str, Any]:
     """
     Comprehensive FEMA flood analysis tool that generates all reports and extracts detailed flood information.
@@ -77,8 +62,7 @@ def comprehensive_flood_analysis(
     2. Generating FIRMette (FIRM) report
     3. Generating Preliminary Comparison (pFIRM) report  
     4. Generating ABFE map (if data available)
-    5. Merging all PDFs into a single comprehensive report
-    6. Extracting structured flood information:
+    5. Extracting structured flood information:
        - Floodplain information and identifiers
        - FIRM panel details and numbers
        - Flood zone designations (A, AE, X, VE, etc.)
@@ -94,7 +78,6 @@ def comprehensive_flood_analysis(
         location_name: Optional descriptive name for the location
         generate_reports: Whether to generate PDF reports (default: True)
         include_abfe: Whether to include ABFE analysis (default: True)
-        merge_pdfs: Whether to merge all PDFs into a single comprehensive report (default: True)
         
     Returns:
         Dictionary containing:
@@ -130,8 +113,7 @@ def comprehensive_flood_analysis(
             "coordinates": {"longitude": longitude, "latitude": latitude},
             "analysis_time": datetime.now().isoformat(),
             "reports_requested": generate_reports,
-            "abfe_requested": include_abfe,
-            "merge_pdfs_requested": merge_pdfs
+            "abfe_requested": include_abfe
         },
         "flood_information": {
             "current_effective": {},
@@ -216,15 +198,7 @@ def comprehensive_flood_analysis(
                         result["reports_generated"][report_type]["error"] = str(e)
                         result["errors"].append(f"{report_type} generation failed: {str(e)}")
         
-        # Step 4: Merge PDFs if requested and reports were generated
-        if generate_reports and merge_pdfs:
-            print("📄 Step 4: Merging generated PDFs...")
-            merge_result = _merge_generated_pdfs(result, location_name, output_manager)
-            result["pdf_merge"] = merge_result
-        else:
-            result["pdf_merge"] = {"requested": False, "success": False, "message": "PDF merging not requested"}
-        
-        # Step 5: Generate summary
+        # Step 4: Generate summary
         print("📋 Step 5: Generating analysis summary...")
         result["analysis_summary"] = _generate_analysis_summary(result)
         
@@ -492,12 +466,12 @@ def _generate_overall_summary(extracted: Dict[str, Any]):
     }
 
 def _generate_firmette_safe(longitude: float, latitude: float, location_name: str, output_manager) -> Dict[str, Any]:
-    """Safely generate FIRMette report with error handling"""
+    """Safely generate FIRMette with error handling"""
     try:
         client = FEMAFIRMetteClient()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = location_name.replace(' ', '_').replace(',', '').replace('(', '').replace(')', '')
-        filename = os.path.join(output_manager.get_subdirectory("reports"), f"firmette_{safe_name}_{timestamp}.pdf")
+        filename = f"firmette_{safe_name}_{timestamp}.pdf"  # Just the filename, not full path
         
         success, result, job_id = client.generate_firmette_via_msc(
             longitude=longitude,
@@ -532,7 +506,7 @@ def _generate_preliminary_safe(longitude: float, latitude: float, location_name:
         client = FEMAPreliminaryComparisonClient()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = location_name.replace(' ', '_').replace(',', '').replace('(', '').replace(')', '')
-        filename = os.path.join(output_manager.get_subdirectory("reports"), f"preliminary_comparison_{safe_name}_{timestamp}.pdf")
+        filename = f"preliminary_comparison_{safe_name}_{timestamp}.pdf"  # Just the filename, not full path
         
         success, result, job_id = client.generate_comparison_report(
             longitude=longitude,
@@ -571,7 +545,7 @@ def _generate_abfe_safe(longitude: float, latitude: float, location_name: str, o
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = location_name.replace(' ', '_').replace(',', '').replace('(', '').replace(')', '')
-        filename = os.path.join(output_manager.get_subdirectory("reports"), f"abfe_map_{safe_name}_{timestamp}.pdf")
+        filename = f"abfe_map_{safe_name}_{timestamp}.pdf"  # Just the filename, not full path
         
         # Determine map parameters based on data availability
         if not abfe_summary['abfe_data_available']:
@@ -664,121 +638,6 @@ def _generate_abfe_safe(longitude: float, latitude: float, location_name: str, o
             "note": "Error occurred during map generation process"
         }
 
-def _merge_generated_pdfs(result: Dict[str, Any], location_name: str, output_manager) -> Dict[str, Any]:
-    """Merge all successfully generated PDFs into a single comprehensive report"""
-    
-    if not PDF_MERGE_AVAILABLE:
-        return {
-            "requested": True,
-            "success": False,
-            "message": "PDF merging not available - PyPDF2 or pypdf not installed",
-            "merged_filename": None
-        }
-    
-    try:
-        # Collect all successfully generated PDF files
-        pdf_files = []
-        reports_info = []
-        
-        reports = result["reports_generated"]
-        
-        # Check FIRMette
-        if reports["firmette"].get("success") and reports["firmette"].get("filename"):
-            filename = reports["firmette"]["filename"]
-            if os.path.exists(filename):
-                pdf_files.append(filename)
-                reports_info.append("FIRMette (FIRM) Report")
-                print(f"   📄 Adding FIRMette: {os.path.basename(filename)}")
-        
-        # Check Preliminary Comparison
-        if reports["preliminary_comparison"].get("success") and reports["preliminary_comparison"].get("filename"):
-            filename = reports["preliminary_comparison"]["filename"]
-            if os.path.exists(filename):
-                pdf_files.append(filename)
-                reports_info.append("Preliminary Comparison (pFIRM) Report")
-                print(f"   📄 Adding Preliminary Comparison: {os.path.basename(filename)}")
-        
-        # Check ABFE Map
-        if reports["abfe_map"].get("success") and reports["abfe_map"].get("filename"):
-            filename = reports["abfe_map"]["filename"]
-            if os.path.exists(filename):
-                pdf_files.append(filename)
-                if reports["abfe_map"].get("data_available", False):
-                    reports_info.append("ABFE (Advisory Base Flood Elevation) Map")
-                else:
-                    reports_info.append("ABFE Reference Map (No ABFE data available)")
-                print(f"   📄 Adding ABFE Map: {os.path.basename(filename)}")
-        
-        if not pdf_files:
-            return {
-                "requested": True,
-                "success": False,
-                "message": "No PDF files available to merge",
-                "merged_filename": None,
-                "files_attempted": 0
-            }
-        
-        # Generate merged filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_name = location_name.replace(' ', '_').replace(',', '').replace('(', '').replace(')', '')
-        merged_filename = os.path.join(output_manager.get_subdirectory("reports"), f"comprehensive_flood_report_{safe_name}_{timestamp}.pdf")
-        
-        print(f"   📄 Merging {len(pdf_files)} PDF(s) into: {os.path.basename(merged_filename)}")
-        
-        # Create PDF merger
-        merger = PdfMerger()
-        
-        # Add cover page information (as a simple text overlay would require additional libraries)
-        # For now, we'll just merge the existing PDFs in order
-        
-        for i, pdf_file in enumerate(pdf_files):
-            try:
-                print(f"   📄 Processing {os.path.basename(pdf_file)}...")
-                with open(pdf_file, 'rb') as file:
-                    merger.append(file)
-            except Exception as e:
-                print(f"   ⚠️  Warning: Could not add {os.path.basename(pdf_file)}: {str(e)}")
-                continue
-        
-        # Write merged PDF
-        with open(merged_filename, 'wb') as output_file:
-            merger.write(output_file)
-        
-        merger.close()
-        
-        # Verify the merged file was created
-        if os.path.exists(merged_filename):
-            file_size = os.path.getsize(merged_filename)
-            print(f"   ✅ Merged PDF created: {os.path.basename(merged_filename)} ({file_size:,} bytes)")
-            
-            return {
-                "requested": True,
-                "success": True,
-                "message": f"Successfully merged {len(pdf_files)} PDF(s) into comprehensive report",
-                "merged_filename": merged_filename,
-                "files_merged": len(pdf_files),
-                "reports_included": reports_info,
-                "file_size_bytes": file_size,
-                "individual_files": [os.path.basename(f) for f in pdf_files]
-            }
-        else:
-            return {
-                "requested": True,
-                "success": False,
-                "message": "Merged PDF file was not created successfully",
-                "merged_filename": merged_filename,
-                "files_attempted": len(pdf_files)
-            }
-    
-    except Exception as e:
-        return {
-            "requested": True,
-            "success": False,
-            "message": f"Error during PDF merging: {str(e)}",
-            "merged_filename": None,
-            "error_details": str(e)
-        }
-
 def _generate_analysis_summary(result: Dict[str, Any]) -> Dict[str, Any]:
     """Generate a comprehensive analysis summary"""
     
@@ -811,11 +670,7 @@ def _generate_analysis_summary(result: Dict[str, Any]) -> Dict[str, Any]:
             "reports_generated": successful_reports,
             "firmette_success": reports["firmette"].get("success", False),
             "preliminary_comparison_success": reports["preliminary_comparison"].get("success", False),
-            "abfe_map_success": reports["abfe_map"].get("success", False),
-            "pdf_merge_requested": result.get("pdf_merge", {}).get("requested", False),
-            "pdf_merge_success": result.get("pdf_merge", {}).get("success", False),
-            "merged_pdf_filename": result.get("pdf_merge", {}).get("merged_filename"),
-            "files_merged": result.get("pdf_merge", {}).get("files_merged", 0)
+            "abfe_map_success": reports["abfe_map"].get("success", False)
         },
         "data_summary": {
             "current_flood_zones_found": len(flood_info["current_effective"]["flood_zones"]),
@@ -864,21 +719,10 @@ def _generate_recommendations(flood_info: Dict[str, Any], reports: Dict[str, Any
         recommendations.append("Use the generated FIRMette for official flood insurance determinations.")
     
     if reports["preliminary_comparison"]["success"]:
-        recommendations.append("Review the preliminary comparison report to understand upcoming flood map changes.")
+        recommendations.append("Review the preliminary comparison report for upcoming flood map changes.")
     
     if reports["abfe_map"]["success"]:
-        recommendations.append("ABFE data provides advisory flood elevation guidance for planning purposes.")
-    
-    # PDF merge recommendations
-    if result:
-        pdf_merge = result.get("pdf_merge", {})
-        if pdf_merge.get("success"):
-            merged_filename = pdf_merge.get("merged_filename", "")
-            files_merged = pdf_merge.get("files_merged", 0)
-            recommendations.append(f"All {files_merged} flood reports have been merged into a single comprehensive PDF: {os.path.basename(merged_filename) if merged_filename else 'comprehensive report'}")
-            recommendations.append("Use the merged PDF for complete flood documentation and regulatory submissions.")
-        elif pdf_merge.get("requested") and not pdf_merge.get("success"):
-            recommendations.append("PDF merging was attempted but failed - individual reports are available separately.")
+        recommendations.append("Consult the ABFE map for advisory base flood elevation information.")
     
     # General recommendations
     recommendations.append("Consult with local floodplain administrators for building and development requirements.")
@@ -890,8 +734,8 @@ def _generate_recommendations(flood_info: Dict[str, Any], reports: Dict[str, Any
 COMPREHENSIVE_FLOOD_TOOLS = [comprehensive_flood_analysis]
 
 def get_comprehensive_tool_description() -> str:
-    """Get description of the comprehensive flood tool"""
-    return "Comprehensive FEMA flood analysis - generates all reports (FIRM, pFIRM, ABFE), extracts detailed flood information including floodplain, panel, zone, elevation, and effective date data, and automatically merges all PDFs into a single comprehensive report"
+    """Get a description of what the comprehensive flood tool provides"""
+    return "Comprehensive FEMA flood analysis - generates all reports (FIRM, pFIRM, ABFE), extracts detailed flood information including floodplain, panel, zone, elevation, and effective date data"
 
 if __name__ == "__main__":
     print("🌊 Comprehensive FEMA Flood Analysis Tool")

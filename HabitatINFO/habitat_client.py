@@ -10,10 +10,13 @@ detailed information about threatened and endangered species habitats.
 import requests
 import json
 import logging
+import os
+import sys
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 import time
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -439,6 +442,201 @@ class CriticalHabitatClient:
             )
         
         return recommendations
+    
+    def save_habitat_data(self, analysis_result: HabitatAnalysisResult,
+                         filename: str = None,
+                         use_output_manager: bool = True) -> bool:
+        """
+        Save critical habitat analysis data to file using output directory manager
+        
+        Args:
+            analysis_result: HabitatAnalysisResult object with analysis results
+            filename: Optional filename (auto-generated if not provided)
+            use_output_manager: Whether to use output directory manager (default: True)
+            
+        Returns:
+            True if save successful, False otherwise
+        """
+        try:
+            # Prepare data for serialization
+            save_data = {
+                'analysis_timestamp': analysis_result.analysis_timestamp,
+                'location': {
+                    'longitude': analysis_result.location[0],
+                    'latitude': analysis_result.location[1]
+                },
+                'query_success': analysis_result.query_success,
+                'error_message': analysis_result.error_message,
+                'summary': {
+                    'has_critical_habitat': analysis_result.has_critical_habitat,
+                    'habitat_count': analysis_result.habitat_count
+                },
+                'critical_habitats': [
+                    {
+                        'species_common_name': habitat.species_common_name,
+                        'species_scientific_name': habitat.species_scientific_name,
+                        'unit_name': habitat.unit_name,
+                        'status': habitat.status,
+                        'habitat_type': habitat.habitat_type,
+                        'geometry_type': habitat.geometry_type,
+                        'designation_date': habitat.designation_date,
+                        'area_acres': habitat.area_acres,
+                        'description': habitat.description
+                    } for habitat in analysis_result.critical_habitats
+                ]
+            }
+            
+            if use_output_manager:
+                # Use output directory manager to get proper file path
+                output_manager = get_output_manager()
+                
+                if not filename:
+                    lon, lat = analysis_result.location
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"critical_habitat_analysis_{lon}_{lat}_{timestamp}.json"
+                
+                # Get the file path using output manager
+                file_path = output_manager.get_file_path(filename, "data")
+                
+                # Save the data
+                with open(file_path, 'w') as f:
+                    json.dump(save_data, f, indent=2, default=str)
+                
+                logger.info(f"Critical habitat data saved to: {file_path}")
+                return True
+            else:
+                # Fallback to current directory
+                if not filename:
+                    lon, lat = analysis_result.location
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"critical_habitat_analysis_{lon}_{lat}_{timestamp}.json"
+                
+                with open(filename, 'w') as f:
+                    json.dump(save_data, f, indent=2, default=str)
+                
+                logger.info(f"Critical habitat data saved to: {filename}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to save critical habitat data: {e}")
+            return False
+    
+    def export_habitat_summary_report(self, analysis_result: HabitatAnalysisResult,
+                                     filename: str = None,
+                                     use_output_manager: bool = True) -> bool:
+        """
+        Export a human-readable summary report of critical habitat data
+        
+        Args:
+            analysis_result: HabitatAnalysisResult object with analysis results
+            filename: Optional filename (auto-generated if not provided)
+            use_output_manager: Whether to use output directory manager (default: True)
+            
+        Returns:
+            True if export successful, False otherwise
+        """
+        try:
+            # Generate report content
+            lon, lat = analysis_result.location
+            report_lines = [
+                "CRITICAL HABITAT ANALYSIS REPORT",
+                "=" * 50,
+                f"Location: {lat:.6f}°N, {lon:.6f}°W",
+                f"Analysis Date: {analysis_result.analysis_timestamp}",
+                "",
+                "SUMMARY",
+                "-" * 20,
+            ]
+            
+            if not analysis_result.query_success:
+                report_lines.extend([
+                    "❌ Analysis failed",
+                    f"Error: {analysis_result.error_message or 'Unknown error'}",
+                    ""
+                ])
+            elif not analysis_result.has_critical_habitat:
+                report_lines.extend([
+                    "✅ No critical habitat areas found at this location",
+                    "This location does not appear to intersect with designated critical habitat areas.",
+                    ""
+                ])
+            else:
+                # Get summary statistics
+                final_count = len([h for h in analysis_result.critical_habitats if h.habitat_type == 'Final'])
+                proposed_count = len([h for h in analysis_result.critical_habitats if h.habitat_type == 'Proposed'])
+                species_count = len(set(h.species_common_name for h in analysis_result.critical_habitats))
+                
+                report_lines.extend([
+                    f"⚠️  CRITICAL HABITAT AREAS DETECTED",
+                    f"Total Habitat Areas Found: {analysis_result.habitat_count}",
+                    f"Final Designations: {final_count}",
+                    f"Proposed Designations: {proposed_count}",
+                    f"Affected Species: {species_count}",
+                    "",
+                    "HABITAT DETAILS",
+                    "-" * 20
+                ])
+                
+                for i, habitat in enumerate(analysis_result.critical_habitats, 1):
+                    type_icon = "🏛️" if habitat.habitat_type == 'Final' else "📋"
+                    report_lines.extend([
+                        f"{i}. {type_icon} {habitat.species_common_name}",
+                        f"   Scientific Name: {habitat.species_scientific_name}",
+                        f"   Status: {habitat.status}",
+                        f"   Habitat Type: {habitat.habitat_type}",
+                        f"   Unit Name: {habitat.unit_name}",
+                        f"   Geometry: {habitat.geometry_type}",
+                        f"   Designation Date: {habitat.designation_date or 'N/A'}",
+                        f"   Area: {habitat.area_acres or 'N/A'} acres",
+                        ""
+                    ])
+                
+                # Add recommendations
+                summary = self.get_habitat_summary(analysis_result)
+                if 'recommendations' in summary:
+                    report_lines.extend([
+                        "RECOMMENDATIONS",
+                        "-" * 20
+                    ])
+                    for rec in summary['recommendations']:
+                        report_lines.append(f"• {rec}")
+                        report_lines.append("")
+            
+            # Save the report
+            report_content = "\n".join(report_lines)
+            
+            if use_output_manager:
+                # Use output directory manager to get proper file path
+                output_manager = get_output_manager()
+                
+                if not filename:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"critical_habitat_report_{lon}_{lat}_{timestamp}.txt"
+                
+                # Get the file path using output manager
+                file_path = output_manager.get_file_path(filename, "reports")
+                
+                # Save the report
+                with open(file_path, 'w') as f:
+                    f.write(report_content)
+                
+                logger.info(f"Critical habitat report saved to: {file_path}")
+                return True
+            else:
+                # Fallback to current directory
+                if not filename:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"critical_habitat_report_{lon}_{lat}_{timestamp}.txt"
+                
+                with open(filename, 'w') as f:
+                    f.write(report_content)
+                
+                logger.info(f"Critical habitat report saved to: {filename}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to export critical habitat report: {e}")
+            return False
 
 # Import math for buffer calculations
 import math 

@@ -10,9 +10,12 @@ import requests
 import json
 import time
 import math
+import os
+import sys
 from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
+
 
 
 @dataclass
@@ -180,6 +183,8 @@ class FEMAFIRMetteClient:
         
         job_url = f"{self.print_service_url}/jobs/{job_id}"
         start_time = time.time()
+        result_extraction_attempts = 0
+        max_result_attempts = 3  # Limit attempts to extract results
         
         print(f"⏳ Polling FIRMette job {job_id} for completion...")
         
@@ -194,6 +199,8 @@ class FEMAFIRMetteClient:
                     print(f"📊 Job status: {job_status}")
                     
                     if job_status == 'esriJobSucceeded':
+                        result_extraction_attempts += 1
+                        
                         # Get the result - try different result parameter names
                         result_urls_to_try = [
                             f"{job_url}/results/OutputFile?f=json",
@@ -228,7 +235,16 @@ class FEMAFIRMetteClient:
                                 print(f"⚠️  Failed to get result from {result_url}: HTTP {result_response.status_code}")
                         
                         # If we get here, we couldn't extract the URL from results
-                        print(f"⚠️  Could not extract PDF URL from job results")
+                        print(f"⚠️  Could not extract PDF URL from job results (attempt {result_extraction_attempts}/{max_result_attempts})")
+                        
+                        # If we've tried multiple times to extract results, give up
+                        if result_extraction_attempts >= max_result_attempts:
+                            print(f"❌ Failed to extract PDF URL after {max_result_attempts} attempts. Job succeeded but results are not accessible.")
+                            return None
+                        
+                        # Wait before retrying result extraction
+                        time.sleep(interval)
+                        continue
                     
                     elif job_status in ['esriJobFailed', 'esriJobCancelled', 'esriJobTimedOut']:
                         print(f"❌ Job failed with status: {job_status}")
@@ -302,40 +318,61 @@ class FEMAFIRMetteClient:
             print(f"⚠️  Error extracting output file URL: {e}")
             return None
     
-    def download_firmette(self, download_url: str, filename: str = None) -> bool:
+    def download_firmette(self, download_url: str, filename: str = None, use_output_manager: bool = True) -> bool:
         """
         Download the FIRMette from the provided URL
         
         Args:
             download_url: URL to download the FIRMette from
-            filename: Local filename to save to (optional)
+            filename: Local filename to save to (optional) - if not provided, will auto-generate
+            use_output_manager: Whether to use the output directory manager (default: True)
             
         Returns:
             True if download successful, False otherwise
         """
         
-        if not filename:
-            # Generate filename from timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"firmette_{timestamp}.pdf"
-        
         try:
+            if use_output_manager:
+                # Use output directory manager to get proper file path
+                output_manager = get_output_manager()
+                
+                if not filename:
+                    # Generate filename from timestamp
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"firmette_{timestamp}.pdf"
+                
+                # Get file path in the reports subdirectory
+                file_path = output_manager.get_file_path(filename, "reports")
+                print(f"📁 Saving FIRMette to project directory: {file_path}")
+                
+            else:
+                # Legacy behavior - save to current directory or specified path
+                if not filename:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"firmette_{timestamp}.pdf"
+                file_path = filename
+                print(f"💾 Saving FIRMette to: {file_path}")
+            
             response = self.session.get(download_url, timeout=60)
             response.raise_for_status()
             
-            with open(filename, 'wb') as f:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            with open(file_path, 'wb') as f:
                 f.write(response.content)
             
-            print(f"FIRMette downloaded successfully: {filename}")
+            print(f"✅ FIRMette downloaded successfully: {file_path}")
             return True
             
         except Exception as e:
-            print(f"Error downloading FIRMette: {e}")
+            print(f"❌ Error downloading FIRMette: {e}")
             return False
     
     def generate_and_download_firmette(self, longitude: float, latitude: float,
                                      location_name: str = None,
-                                     filename: str = None) -> Tuple[bool, str]:
+                                     filename: str = None,
+                                     use_output_manager: bool = True) -> Tuple[bool, str]:
         """
         Generate and download a FIRMette in one operation
         
@@ -344,12 +381,13 @@ class FEMAFIRMetteClient:
             latitude: Latitude coordinate
             location_name: Optional name for the location
             filename: Local filename to save to (optional)
+            use_output_manager: Whether to use the output directory manager (default: True)
             
         Returns:
             Tuple of (success, message)
         """
         
-        print(f"Generating FIRMette for coordinates: {latitude}, {longitude}")
+        print(f"🗺️ Generating FIRMette for coordinates: {latitude}, {longitude}")
         
         # Generate the FIRMette
         success, result, job_id = self.generate_firmette_via_msc(
@@ -364,11 +402,11 @@ class FEMAFIRMetteClient:
         if not result:
             return False, "No download URL received"
         
-        print(f"FIRMette generated successfully. Job ID: {job_id}")
-        print(f"Download URL: {result}")
+        print(f"✅ FIRMette generated successfully. Job ID: {job_id}")
+        print(f"🔗 Download URL: {result}")
         
-        # Download the file
-        if self.download_firmette(result, filename):
+        # Download the file using output directory manager
+        if self.download_firmette(result, filename, use_output_manager):
             return True, f"FIRMette generated and downloaded successfully"
         else:
             return False, "FIRMette generated but download failed"

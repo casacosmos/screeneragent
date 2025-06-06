@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 from langchain_core.tools import tool
-from prapec_karst_checker import PrapecKarstChecker
+from .prapec_karst_checker import PrapecKarstChecker
 from cadastral.cadastral_search import MIPRCadastralSearch
 from output_directory_manager import get_output_manager
 

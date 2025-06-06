@@ -10,8 +10,6 @@ import json
 from typing import Dict, List, Any, Optional, Tuple, Set
 from collections import defaultdict
 
-# Add the parent directory to the path to access mapmaker
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from mapmaker.common import MapServerClient
 

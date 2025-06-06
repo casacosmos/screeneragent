@@ -9,7 +9,7 @@ import os
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import uuid
 import time
 import logging
@@ -20,20 +20,57 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+from contextlib import asynccontextmanager
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Import our environmental screening system
-from environmental_screening_templates import (
-    ScreeningRequest, 
-    ScreeningResponse, 
-    EnvironmentalScreeningAPI,
-    ResponseProcessingTemplates
-)
-from comprehensive_environmental_agent import create_comprehensive_environmental_agent
+try:
+    from environmental_screening_templates import (
+        ScreeningRequest, 
+        ScreeningResponse, 
+        EnvironmentalScreeningAPI
+    )
+except ImportError:
+    logger.warning("Environmental screening templates not found - some features may not work")
+
+# Import the comprehensive environmental agent and structured output
+try:
+    from comprehensive_environmental_agent import create_comprehensive_environmental_agent, StructuredScreeningOutput
+    STRUCTURED_OUTPUT_AVAILABLE = True
+    logger.info("StructuredScreeningOutput imported successfully")
+except ImportError as e:
+    logger.warning(f"StructuredScreeningOutput not available: {e} - using legacy approach")
+    STRUCTURED_OUTPUT_AVAILABLE = False
+    StructuredScreeningOutput = None
+
+# Import the comprehensive screening report tools
+try:
+    from comprehensive_screening_report_tool import (
+        generate_comprehensive_screening_report,
+        find_latest_screening_directory
+    )
+    REPORT_TOOLS_AVAILABLE = True
+except ImportError:
+    logger.warning("Comprehensive screening report tools not available")
+    REPORT_TOOLS_AVAILABLE = False
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    load_existing_data()
+    logger.info(f"Loaded {len(projects_db)} existing projects and {len(reports_db)} reports")
+    yield
+    # Shutdown (if needed)
+    pass
 
 app = FastAPI(
     title="Environmental Screening Platform",
     description="Advanced frontend for comprehensive environmental screening analysis",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS middleware
@@ -57,10 +94,25 @@ active_batches: Dict[str, Dict] = {}
 # Create a simple wrapper for the agent
 class EnvironmentalScreeningAgent:
     def __init__(self):
-        self.graph = create_comprehensive_environmental_agent()
+        try:
+            self.graph = create_comprehensive_environmental_agent()
+            logger.info("Environmental screening agent initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize environmental screening agent: {e}")
+            self.graph = None
+
+    def is_ready(self) -> bool:
+        """Check if the agent is ready to process requests"""
+        return self.graph is not None
 
 # Initialize our environmental agent
-agent = EnvironmentalScreeningAgent()
+try:
+    agent = EnvironmentalScreeningAgent()
+    if not agent.is_ready():
+        logger.warning("Environmental agent not ready - some features may not work")
+except Exception as e:
+    logger.error(f"Critical error initializing agent: {e}")
+    agent = None
 
 class ProjectRequest(BaseModel):
     project_name: str
@@ -204,6 +256,13 @@ async def get_dashboard_data():
 async def start_environmental_screening(request: ProjectRequest, background_tasks: BackgroundTasks):
     """Start a new environmental screening"""
     try:
+        # Check if agent is available
+        if not agent or not agent.is_ready():
+            raise HTTPException(
+                status_code=503, 
+                detail="Environmental screening agent is not available. Please check server configuration."
+            )
+        
         # Generate unique screening ID
         screening_id = f"screening_{int(time.time())}_{len(active_screenings)}"
         
@@ -216,7 +275,8 @@ async def start_environmental_screening(request: ProjectRequest, background_task
             "start_time": datetime.now(),
             "request": request.dict(),
             "result": None,
-            "error": None
+            "error": None,
+            "log_entries": []  # Initialize log entries
         }
         
         active_screenings[screening_id] = screening_status
@@ -224,8 +284,11 @@ async def start_environmental_screening(request: ProjectRequest, background_task
         # Start background task
         background_tasks.add_task(run_environmental_screening, screening_id, request)
         
+        logger.info(f"Started environmental screening {screening_id}")
         return {"screening_id": screening_id, "status": "started"}
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error starting screening: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -234,6 +297,13 @@ async def start_environmental_screening(request: ProjectRequest, background_task
 async def start_batch_environmental_screening(batch_request: List[ProjectRequest], background_tasks: BackgroundTasks):
     """Start multiple environmental screenings in batch"""
     try:
+        # Check if agent is available
+        if not agent or not agent.is_ready():
+            raise HTTPException(
+                status_code=503, 
+                detail="Environmental screening agent is not available. Please check server configuration."
+            )
+        
         # Generate unique batch ID
         batch_id = f"batch_{int(time.time())}_{len(active_batches)}"
         
@@ -256,7 +326,8 @@ async def start_batch_environmental_screening(batch_request: List[ProjectRequest
                 "result": None,
                 "error": None,
                 "batch_id": batch_id,
-                "batch_index": i
+                "batch_index": i,
+                "log_entries": []
             }
             
             active_screenings[screening_id] = screening_status
@@ -279,6 +350,7 @@ async def start_batch_environmental_screening(batch_request: List[ProjectRequest
         # Start batch processing task
         background_tasks.add_task(run_batch_screening, batch_id, batch_request)
         
+        logger.info(f"Started batch screening {batch_id} with {len(batch_request)} items")
         return {
             "batch_id": batch_id, 
             "status": "started",
@@ -286,6 +358,8 @@ async def start_batch_environmental_screening(batch_request: List[ProjectRequest
             "total_items": len(batch_request)
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error starting batch screening: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -488,50 +562,8 @@ async def download_project_reports(project_id: str):
 
 # Background Processing
 async def process_environmental_screening(screening_id: str, request: ProjectRequest):
-    """Process environmental screening in background"""
-    try:
-        # Update status
-        update_screening_status(screening_id, 'running', 10, 'setup', 'Setting up analysis parameters...')
-        
-        # Convert request to screening request format
-        screening_request = create_screening_request(request)
-        
-        # Update status
-        update_screening_status(screening_id, 'running', 20, 'property', 'Starting property analysis...')
-        
-        # Generate the environmental screening command
-        command = generate_screening_command(screening_request)
-        
-        # Update status
-        update_screening_status(screening_id, 'running', 40, 'environmental', 'Running environmental analysis...')
-        
-        # Execute the screening using our agent
-        response = await run_agent_screening(command)
-        
-        # Update status
-        update_screening_status(screening_id, 'running', 80, 'reports', 'Generating reports...')
-        
-        # Process the response and extract files
-        await process_screening_response(screening_id, response, request)
-        
-        # Update final status
-        update_screening_status(screening_id, 'completed', 100, 'reports', 'Screening completed successfully!')
-        
-        # Update project status
-        update_project_status(screening_id, 'completed')
-        
-    except Exception as e:
-        # Update error status
-        active_screenings[screening_id].update({
-            'status': 'failed',
-            'error': str(e),
-            'message': f'Screening failed: {str(e)}'
-        })
-        
-        # Update project status
-        update_project_status(screening_id, 'failed')
-        
-        print(f"Screening {screening_id} failed: {str(e)}")
+    """Process environmental screening in background - this is now a wrapper"""
+    await run_environmental_screening(screening_id, request)
 
 def create_screening_request(request: ProjectRequest) -> ProjectRequest:
     """Convert ProjectRequest to ScreeningRequest (now just returns the same object)"""
@@ -569,78 +601,263 @@ def generate_screening_command(screening_request: ProjectRequest) -> str:
     
     return command
 
-async def run_agent_screening(command: str) -> str:
-    """Run the environmental screening agent"""
+async def run_agent_screening(command: str) -> Dict[str, Any]:
+    """Run the environmental screening agent with proper async handling"""
     try:
         # Use our comprehensive environmental agent
-        result = agent.graph.invoke({"messages": [{"role": "user", "content": command}]})
+        # According to LangGraph docs, use ainvoke for async execution
+        # When using checkpointer (MemorySaver), we need to provide config with thread_id
+        config = {"configurable": {"thread_id": str(uuid.uuid4())}}
         
-        # Extract the response
-        if result and 'messages' in result:
-            last_message = result['messages'][-1]
-            if hasattr(last_message, 'content'):
-                return last_message.content
+        result = await agent.graph.ainvoke(
+            {"messages": [{"role": "user", "content": command}]},
+            config=config
+        )
+        
+        # According to LangGraph docs, agent returns:
+        # - 'messages': List of all messages exchanged during execution
+        # - 'structured_response': If structured output is configured
+        # - Additional state fields if using custom state schema
+        
+        if result and isinstance(result, dict):
+            # Check for structured response first (from response_format configuration)
+            if 'structured_response' in result:
+                logger.info("Agent returned structured response")
+                return result
+            
+            # If no structured response, try to extract from messages
+            elif 'messages' in result and result['messages']:
+                last_message = result['messages'][-1]
+                
+                # Check if the last message has content that might be structured JSON
+                if hasattr(last_message, 'content') and last_message.content:
+                    content = last_message.content
+                    if isinstance(content, str) and content.strip().startswith('{'):
+                        try:
+                            import json
+                            structured_data = json.loads(content)
+                            return {'structured_response': structured_data, 'messages': result['messages']}
+                        except json.JSONDecodeError:
+                            logger.warning("Could not parse message content as JSON")
+                    
+                    # Return the content as is if not JSON
+                    return {'response_content': content, 'messages': result['messages']}
+                else:
+                    # Return the message object as string
+                    return {'response_content': str(last_message), 'messages': result['messages']}
             else:
-                return str(last_message)
+                # Fallback: return the entire result
+                return {'response_content': str(result)}
         
-        return str(result)
+        # Final fallback
+        return {'response_content': str(result)}
         
     except Exception as e:
+        logger.error(f"Agent execution failed: {str(e)}")
         raise Exception(f"Agent execution failed: {str(e)}")
 
-async def process_screening_response(screening_id: str, response: str, request: ProjectRequest):
+async def process_screening_response(screening_id: str, response: Dict[str, Any], request: ProjectRequest):
     """Process the agent response and extract generated files"""
     try:
-        # Extract project information
-        project_info = ResponseProcessingTemplates.extract_project_info(response)
+        # Extract structured data from the corrected agent response format
+        structured_data = None
         
-        # Extract environmental findings
-        findings = ResponseProcessingTemplates.extract_environmental_findings(response)
+        # Check for structured_response key (preferred)
+        if 'structured_response' in response:
+            structured_data = response['structured_response']
+            logger.info("Found structured response from agent")
         
-        # Extract generated files
-        files_info = ResponseProcessingTemplates.extract_generated_files(response)
+        # Fallback: check for response_content
+        elif 'response_content' in response:
+            response_content = response['response_content']
+            # Try to parse as JSON if it's a string
+            if isinstance(response_content, str) and response_content.strip().startswith('{'):
+                try:
+                    import json
+                    structured_data = json.loads(response_content)
+                    logger.info("Parsed response_content as JSON")
+                except json.JSONDecodeError:
+                    logger.warning("Could not parse response_content as JSON")
+                    # Create a minimal structured response
+                    structured_data = {
+                        'success': True,
+                        'project_name': request.project_name,
+                        'agent_raw_response': response_content
+                    }
+            else:
+                # Create a minimal structured response from content
+                structured_data = {
+                    'success': True,
+                    'project_name': request.project_name,
+                    'agent_raw_response': str(response_content)
+                }
         
-        # Find the most recent project directory
-        output_dir = Path("output")
-        project_dirs = sorted([d for d in output_dir.glob("*") if d.is_dir()], key=lambda x: x.stat().st_mtime, reverse=True)
+        # Final fallback: create minimal structure
+        if not structured_data:
+            structured_data = {
+                'success': True,
+                'project_name': request.project_name,
+                'agent_raw_response': str(response)
+            }
+            logger.warning("No structured data found, created minimal response structure")
         
-        if project_dirs:
-            latest_dir = project_dirs[0]
-            
-            # Scan for generated files
-            report_files = []
-            
-            # Check reports/pdfs directory (comprehensive PDFs)
-            pdf_dir = latest_dir / "reports" / "pdfs"
-            if pdf_dir.exists():
-                for file_path in pdf_dir.rglob("*"):
-                    if file_path.is_file():
-                        report_files.append(file_path)
-            
-            # Check reports directory
-            reports_dir = latest_dir / "reports"
-            if reports_dir.exists():
-                for file_path in reports_dir.rglob("*"):
-                    if file_path.is_file() and file_path not in report_files:  # Avoid duplicates
-                        report_files.append(file_path)
-            
-            # Check main directory
-            for file_path in latest_dir.rglob("*"):
-                if file_path.is_file() and file_path.parent == latest_dir:
-                    report_files.append(file_path)
-            
-            # Add files to reports database with proper categorization
-            for file_path in report_files:
-                file_stat = file_path.stat()
+        # Validate the structured data using our Pydantic model if possible
+        validated_output = structured_data
+        try:
+            if isinstance(structured_data, dict) and STRUCTURED_OUTPUT_AVAILABLE:
+                validated_output = StructuredScreeningOutput(**structured_data)
+                logger.info("Successfully validated structured output with Pydantic model")
+            elif not STRUCTURED_OUTPUT_AVAILABLE:
+                logger.info("Using legacy structured data approach - StructuredScreeningOutput not available")
+        except Exception as e:
+            logger.warning(f"Error validating structured output with Pydantic: {e}")
+            # Continue with the dict directly
+            validated_output = structured_data
+        
+        # Extract project information from structured output
+        project_name_from_agent = getattr(validated_output, 'project_name', None) or structured_data.get('project_name')
+        project_directory_from_agent = getattr(validated_output, 'project_directory', None) or structured_data.get('project_directory')
+        success_status = getattr(validated_output, 'success', None) or structured_data.get('success', True)
+        
+        # Find the project directory - prefer agent's report, fallback to filesystem scan
+        latest_dir = None
+        if project_directory_from_agent:
+            latest_dir = Path(project_directory_from_agent)
+            if not latest_dir.exists():
+                # Try relative to current directory
+                latest_dir = Path.cwd() / project_directory_from_agent
+        
+        # If we don't have a directory from the agent, try to find the latest one
+        if not latest_dir or not latest_dir.exists():
+            if REPORT_TOOLS_AVAILABLE:
+                # Use the find_latest_screening_directory tool
+                result = find_latest_screening_directory()
+                if result["success"]:
+                    latest_dir = Path(result["latest_directory"])
+                    logger.info(f"Found latest screening directory: {latest_dir}")
+            else:
+                # Fallback: scan for most recent directory
+                output_dir = Path("output")
+                if output_dir.exists():
+                    project_dirs = sorted([d for d in output_dir.glob("*") if d.is_dir()], 
+                                        key=lambda x: x.stat().st_mtime, reverse=True)
+                    if project_dirs:
+                        latest_dir = project_dirs[0]
+        
+        # If we still don't have a directory, there's a problem
+        if not latest_dir or not latest_dir.exists():
+            logger.error(f"Could not find project directory for screening {screening_id}")
+            raise Exception("Project directory not found after agent completion")
+        
+        logger.info(f"Using project directory: {latest_dir}")
+        
+        # Check if comprehensive reports were already generated by the agent
+        reports_already_generated = False
+        if isinstance(structured_data, dict) and 'comprehensive_reports' in structured_data:
+            comp_reports = structured_data['comprehensive_reports']
+            if comp_reports and isinstance(comp_reports, dict):
+                if comp_reports.get('pdf') or comp_reports.get('json_report') or comp_reports.get('markdown'):
+                    reports_already_generated = True
+                    logger.info("Comprehensive reports already generated by agent")
+        
+        # If reports weren't generated by the agent, generate them now using the tools
+        if not reports_already_generated and REPORT_TOOLS_AVAILABLE:
+            logger.info("Generating comprehensive reports using report generation tools...")
+            try:
+                # Use invoke method instead of deprecated __call__
+                report_result = generate_comprehensive_screening_report.invoke({
+                    "output_directory": str(latest_dir),
+                    "output_format": "both",
+                    "include_pdf": True,
+                    "use_llm": request.use_llm_enhancement,
+                    "use_professional_html_pdf": True
+                })
                 
-                # Determine file category based on location and name
-                file_category = "report"
-                if "comprehensive" in file_path.name.lower():
-                    file_category = "comprehensive_pdf"
-                elif file_path.suffix.lower() == '.pdf':
-                    file_category = "pdf"
-                elif file_path.suffix.lower() in ['.json', '.md']:
-                    file_category = "data"
+                if report_result["success"]:
+                    logger.info(f"Successfully generated comprehensive reports: {report_result['output_files']}")
+                    # Update the structured data with the generated report paths
+                    if not structured_data.get('comprehensive_reports'):
+                        structured_data['comprehensive_reports'] = {}
+                    
+                    for file_path in report_result['output_files']:
+                        file_path_obj = Path(file_path)
+                        relative_path = file_path_obj.relative_to(latest_dir)
+                        if file_path.endswith('.pdf'):
+                            structured_data['comprehensive_reports']['pdf'] = str(relative_path)
+                        elif file_path.endswith('.json'):
+                            structured_data['comprehensive_reports']['json_report'] = str(relative_path)
+                        elif file_path.endswith('.md'):
+                            structured_data['comprehensive_reports']['markdown'] = str(relative_path)
+                else:
+                    logger.warning(f"Report generation failed: {report_result.get('error', 'Unknown error')}")
+            except Exception as e:
+                logger.error(f"Error generating comprehensive reports: {e}")
+        
+        # Extract and catalog all generated files
+        report_files_generated = []
+        file_paths_to_add = []
+        
+        # Add comprehensive reports to the catalog
+        if isinstance(structured_data, dict) and 'comprehensive_reports' in structured_data:
+            comp_reports = structured_data['comprehensive_reports']
+            if comp_reports and isinstance(comp_reports, dict):
+                if comp_reports.get('json_report'):
+                    file_paths_to_add.append({"path": comp_reports['json_report'], "category": "comprehensive_json"})
+                if comp_reports.get('markdown'):
+                    file_paths_to_add.append({"path": comp_reports['markdown'], "category": "comprehensive_markdown"})
+                if comp_reports.get('pdf'):
+                    file_paths_to_add.append({"path": comp_reports['pdf'], "category": "comprehensive_pdf"})
+        
+        # Extract maps from analysis sections
+        analysis_sections = ['flood_analysis', 'wetland_analysis', 'habitat_analysis', 'air_quality_analysis', 'karst_analysis']
+        for section_name in analysis_sections:
+            # Handle both Pydantic models and dict cases properly
+            if hasattr(validated_output, section_name):
+                section_data = getattr(validated_output, section_name, None)
+            else:
+                section_data = structured_data.get(section_name) if isinstance(structured_data, dict) else None
+                
+            if section_data:
+                # Look for map path fields ending with '_map_path'
+                if isinstance(section_data, dict):
+                    for key, value in section_data.items():
+                        if key.endswith('_map_path') and value:
+                            file_paths_to_add.append({"path": value, "category": "analysis_map"})
+                elif hasattr(section_data, '__dict__'):
+                    for key, value in section_data.__dict__.items():
+                        if key.endswith('_map_path') and value:
+                            file_paths_to_add.append({"path": value, "category": "analysis_map"})
+        
+        # Extract other maps and reports - handle both Pydantic and dict cases
+        def safe_get_attr(obj, attr_name, default=None):
+            """Safely get attribute from either Pydantic model or dict"""
+            if hasattr(obj, attr_name):
+                return getattr(obj, attr_name, default)
+            elif isinstance(structured_data, dict):
+                return structured_data.get(attr_name, default)
+            return default
+        
+        other_maps = safe_get_attr(validated_output, 'maps_generated_other', [])
+        if other_maps:
+            for map_path in other_maps:
+                file_paths_to_add.append({"path": map_path, "category": "map"})
+        
+        other_reports = safe_get_attr(validated_output, 'individual_analysis_reports_other', [])
+        if other_reports:
+            for report_path in other_reports:
+                file_paths_to_add.append({"path": report_path, "category": "individual_report"})
+        
+        data_files = safe_get_attr(validated_output, 'data_files_supporting', [])
+        if data_files:
+            for data_path in data_files:
+                file_paths_to_add.append({"path": data_path, "category": "data"})
+        
+        # Add files to reports database
+        for file_info in file_paths_to_add:
+            file_path = latest_dir / file_info["path"]
+            
+            if file_path.exists() and file_path.is_file():
+                file_stat = file_path.stat()
                 
                 reports_db.append({
                     'filename': file_path.name,
@@ -649,59 +866,39 @@ async def process_screening_response(screening_id: str, response: str, request: 
                     'size': file_stat.st_size,
                     'created_date': datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
                     'file_path': str(file_path),
-                    'category': file_category,
+                    'category': file_info["category"],
                     'is_pdf': file_path.suffix.lower() == '.pdf',
                     'relative_path': str(file_path.relative_to(latest_dir))
                 })
-            
-            # Update project with file count and risk assessment
-            project = next((p for p in projects_db if p['id'] == screening_id), None)
-            if project:
-                project['reports_count'] = len([r for r in reports_db if r.get('project_id') == screening_id])
-                
-                # Count PDFs specifically
-                pdf_count = len([r for r in reports_db if r.get('project_id') == screening_id and r.get('is_pdf')])
-                project['pdf_count'] = pdf_count
-                
-                # Assess risk level based on findings
-                if findings:
-                    risk_level = assess_risk_level(findings)
-                    project['risk_level'] = risk_level
+                report_files_generated.append(file_path)
         
-        # Log completion
-        update_screening_log(screening_id, f"Generated {len(report_files)} reports and documents")
+        # Update project with file count and risk assessment
+        project = next((p for p in projects_db if p['id'] == screening_id), None)
+        if project:
+            project['reports_count'] = len([r for r in reports_db if r.get('project_id') == screening_id])
+            pdf_count = len([r for r in reports_db if r.get('project_id') == screening_id and r.get('is_pdf')])
+            project['pdf_count'] = pdf_count
+            
+            # Extract risk level from structured output - handle both cases
+            risk_level = safe_get_attr(validated_output, 'overall_risk_level_assessment', 'Unknown')
+            project['risk_level'] = risk_level
+            project['project_directory'] = str(latest_dir)
+        
+        update_screening_log(screening_id, f"Processed structured response. Generated {len(report_files_generated)} reports and documents.")
+        logger.info(f"Successfully processed {len(report_files_generated)} files for screening {screening_id}")
         
     except Exception as e:
-        print(f"Error processing screening response: {str(e)}")
-        # Continue anyway - don't fail the whole screening
-
-def assess_risk_level(findings: dict) -> str:
-    """Assess risk level based on environmental findings"""
-    risk_factors = 0
-    
-    # Check for high-risk indicators
-    if findings.get('flood_zone') and findings['flood_zone'] not in ['X', 'X (unshaded)']:
-        risk_factors += 2
-    
-    if findings.get('wetlands_present'):
-        risk_factors += 1
-    
-    if findings.get('critical_habitat_present'):
-        risk_factors += 2
-    
-    if findings.get('karst_areas_present'):
-        risk_factors += 1
-    
-    if findings.get('nonattainment_areas'):
-        risk_factors += 1
-    
-    # Determine risk level
-    if risk_factors >= 4:
-        return 'High'
-    elif risk_factors >= 2:
-        return 'Moderate'
-    else:
-        return 'Low'
+        logger.error(f"Error processing screening response: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Update error status
+        active_screenings[screening_id].update({
+            'status': 'failed',
+            'error': str(e),
+            'message': f'Screening failed during response processing: {str(e)}'
+        })
+        update_project_status(screening_id, 'failed')
 
 def update_screening_status(screening_id: str, status: str, progress: float, step: str, message: str):
     """Update screening status"""
@@ -794,15 +991,8 @@ def load_existing_data():
             project['reports_count'] = report_count
             projects_db.append(project)
 
-# Initialize on startup
-@app.on_event("startup")
-async def startup_event():
-    """Load existing data on startup"""
-    load_existing_data()
-    print(f"Loaded {len(projects_db)} existing projects and {len(reports_db)} reports")
-
 async def run_environmental_screening(screening_id: str, request: ProjectRequest):
-    """Background task to run environmental screening"""
+    """Background task to run environmental screening using the comprehensive agent"""
     try:
         screening = active_screenings[screening_id]
         screening["status"] = "running"
@@ -827,41 +1017,59 @@ async def run_environmental_screening(screening_id: str, request: ProjectRequest
         projects_db.append(project)
         
         # Update progress
+        screening["progress"] = 20
+        screening["message"] = "Preparing environmental screening command..."
+        update_screening_log(screening_id, "Generating screening command from request parameters")
+        
+        # Generate the screening command
+        command = generate_screening_command(request)
+        logger.info(f"Generated screening command: {command}")
+        
+        # Update progress
         screening["progress"] = 30
-        screening["message"] = "Running environmental agent..."
+        screening["message"] = "Running comprehensive environmental agent..."
+        update_screening_log(screening_id, f"Executing agent with command: {command}")
         
-        # Here you would run the actual environmental screening
-        # For now, we'll simulate the process
-        await asyncio.sleep(5)  # Simulate processing time
+        # Execute the screening using our agent with proper async handling
+        response = await run_agent_screening(command)
+        logger.info(f"Agent completed for screening {screening_id}")
         
+        # Update progress
         screening["progress"] = 80
-        screening["message"] = "Generating reports..."
+        screening["message"] = "Processing results and generating reports..."
+        update_screening_log(screening_id, "Agent execution completed, processing response")
         
-        await asyncio.sleep(2)  # Simulate report generation
+        # Process the response and extract files
+        await process_screening_response(screening_id, response, request)
         
-        # Complete the screening
+        # Update final status
         screening["status"] = "completed"
         screening["progress"] = 100
-        screening["message"] = "Environmental screening completed successfully"
-        screening["result"] = {
-            "project_directory": f"output/{request.project_name}_{screening_id}",
-            "reports_generated": ["comprehensive_report.md", "environmental_analysis.pdf"],
-            "risk_assessment": "Low to Medium Risk"
-        }
+        screening["message"] = "Environmental screening completed successfully!"
+        update_screening_log(screening_id, "Screening process completed successfully")
         
         # Update project status
         project['status'] = 'completed'
-        project['risk_level'] = 'Medium'
-        project['reports_count'] = 2
+        project['completed_date'] = datetime.now().isoformat()
         
         logger.info(f"Screening {screening_id} completed successfully")
         
     except Exception as e:
         logger.error(f"Error in screening {screening_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        
         screening = active_screenings.get(screening_id, {})
         screening["status"] = "failed"
         screening["error"] = str(e)
         screening["message"] = f"Screening failed: {str(e)}"
+        update_screening_log(screening_id, f"Screening failed with error: {str(e)}")
+        
+        # Update project status
+        project = next((p for p in projects_db if p['id'] == screening_id), None)
+        if project:
+            project['status'] = 'failed'
+            project['error'] = str(e)
 
 async def run_batch_screening(batch_id: str, batch_requests: List[ProjectRequest]):
     """Background task to run batch environmental screening"""
@@ -895,6 +1103,70 @@ async def run_batch_screening(batch_id: str, batch_requests: List[ProjectRequest
         batch = active_batches.get(batch_id, {})
         batch["status"] = "failed"
         batch["error"] = str(e)
+
+async def _generate_sophisticated_pdf_from_structured_data(screening_id: str, structured_data: dict, project_directory: Path):
+    """Generate sophisticated PDF using structured data from agent response"""
+    try:
+        # Check if sophisticated PDF generation is available
+        try:
+            from pdf_report_generator import StructuredPDFGenerator, STRUCTURED_OUTPUT_AVAILABLE
+            if not STRUCTURED_OUTPUT_AVAILABLE:
+                print(f"⚠️ Structured PDF generation not available for {screening_id}")
+                return
+        except ImportError:
+            print(f"⚠️ PDF generation modules not available for {screening_id}")
+            return
+        
+        # Extract the structured data (either from StructuredScreeningOutput or raw dict)
+        if hasattr(structured_data, '__dict__'):
+            # Convert Pydantic model to dict
+            data_dict = structured_data.dict() if hasattr(structured_data, 'dict') else structured_data.__dict__
+        else:
+            data_dict = structured_data
+        
+        print(f"📄 Generating sophisticated PDF for {screening_id} using structured data...")
+        
+        # Create sophisticated PDF generator
+        pdf_generator = StructuredPDFGenerator(
+            structured_data=data_dict,
+            project_directory=str(project_directory),
+            use_llm=True  # Use LLM enhancement if available
+        )
+        
+        # Generate the PDF
+        project_name = data_dict.get('project_name', 'Environmental_Screening')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        pdf_filename = f"sophisticated_screening_report_{project_name}_{timestamp}.pdf"
+        
+        pdf_path = pdf_generator.generate_sophisticated_pdf_report(pdf_filename)
+        
+        # Add to reports database
+        pdf_file = Path(pdf_path)
+        if pdf_file.exists():
+            file_stat = pdf_file.stat()
+            reports_db.append({
+                'filename': pdf_file.name,
+                'title': 'Sophisticated Environmental Screening Report',
+                'project_id': screening_id,
+                'size': file_stat.st_size,
+                'created_date': datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                'file_path': str(pdf_file),
+                'category': 'sophisticated_pdf',
+                'is_pdf': True,
+                'relative_path': f"reports/{pdf_file.name}"
+            })
+            
+            update_screening_log(screening_id, f"Generated sophisticated PDF report: {pdf_file.name}")
+            print(f"✅ Sophisticated PDF generated for {screening_id}: {pdf_file.name}")
+            
+            # Update project PDF count
+            project = next((p for p in projects_db if p['id'] == screening_id), None)
+            if project:
+                project['pdf_count'] = project.get('pdf_count', 0) + 1
+        
+    except Exception as e:
+        print(f"⚠️ Failed to generate sophisticated PDF for {screening_id}: {e}")
+        update_screening_log(screening_id, f"Sophisticated PDF generation failed: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Template Workflow Test - Juncos PR - Comprehensive Environmental Screening Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #fff; }
+        .container { max-width: 8.5in; margin: 0 auto; padding: 0.5in; }
+        
+        /* Header Styles */
+        .header { text-align: center; border-bottom: 3px solid #2c5aa0; padding-bottom: 20px; margin-bottom: 30px; }
+        .main-title { font-size: 28px; font-weight: bold; color: #2c5aa0; margin-bottom: 10px; }
+        .project-title { font-size: 20px; color: #444; margin-bottom: 15px; }
+        .analysis-date { font-size: 14px; color: #666; }
+        
+        /* Section Styles */
+        .section { margin-bottom: 30px; page-break-inside: avoid; }
+        .section-header { background: linear-gradient(135deg, #2c5aa0, #4a7bc8); color: white; padding: 12px 16px; font-size: 18px; font-weight: bold; margin-bottom: 15px; border-radius: 4px; }
+        .subsection-header { background: #f0f4f8; color: #2c5aa0; padding: 8px 12px; font-size: 14px; font-weight: bold; margin: 15px 0 8px 0; border-left: 4px solid #2c5aa0; }
+        
+        /* Table Styles */
+        .data-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+        .data-table th, .data-table td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
+        .data-table th { background: #f8f9fa; font-weight: bold; color: #2c5aa0; width: 30%; }
+        .data-table td { background: #fff; }
+        
+        /* Data Display Styles */
+        .copyable-data { background: #f8f9fa; border: 1px solid #dee2e6; padding: 8px; font-family: 'Courier New', monospace; font-size: 11px; border-radius: 3px; margin: 5px 0; user-select: all; }
+        .metadata-box { background: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 11px; }
+        .geometry-info { background: #e8f4fd; border: 1px solid #b8e6ff; padding: 8px; margin: 5px 0; border-radius: 3px; font-size: 11px; }
+        
+        /* Alert Styles */
+        .alert { padding: 12px; margin: 10px 0; border-radius: 4px; font-weight: bold; }
+        .alert-critical { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .alert-warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }
+        .alert-info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        .alert-success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        
+        /* List Styles */
+        .constraint-list, .requirement-list, .recommendation-list { list-style: none; padding: 0; }
+        .constraint-list li, .requirement-list li, .recommendation-list li { background: #f8f9fa; margin: 3px 0; padding: 6px 10px; border-left: 3px solid #2c5aa0; font-size: 12px; }
+        
+        /* Map Styles */
+        .map-container { text-align: center; margin: 15px 0; page-break-inside: avoid; }
+        .map-image { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; }
+        .map-caption { font-style: italic; color: #666; font-size: 11px; margin-top: 5px; }
+        
+        /* Checklist Table */
+        .checklist-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; }
+        .checklist-table th, .checklist-table td { border: 1px solid #333; padding: 8px; text-align: left; }
+        .checklist-table th { background: #2c5aa0; color: white; font-weight: bold; }
+        .status-green { background: #d4edda !important; color: #155724; text-align: center; font-weight: bold; }
+        .status-yellow { background: #fff3cd !important; color: #856404; text-align: center; font-weight: bold; }
+        .status-red { background: #f8d7da !important; color: #721c24; text-align: center; font-weight: bold; }
+        
+        /* Executive Summary */
+        .executive-summary { background: linear-gradient(135deg, #f8f9fa, #e9ecef); border: 2px solid #2c5aa0; padding: 15px; border-radius: 8px; margin: 20px 0; }
+        .risk-badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+        .risk-low { background: #d4edda; color: #155724; }
+        .risk-moderate { background: #fff3cd; color: #856404; }
+        .risk-high { background: #f8d7da; color: #721c24; }
+        
+        /* Print Styles */
+        @media print { body { font-size: 10px; } .section, .map-container, .checklist-table { page-break-inside: avoid; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="main-title">Comprehensive Environmental Screening Report</div>
+            <div class="project-title">Template Workflow Test - Juncos PR</div>
+            <div class="analysis-date">Analysis Date: 2025-05-29T11:09:07.071958</div>
+        </div>
+        
+        <!-- Executive Summary -->
+        <div class="section">
+            <div class="section-header">Executive Summary</div>
+            <div class="executive-summary">
+                <p><strong>Overall Risk Level:</strong> <span class="risk-badge risk-moderate">Moderate</span></p>
+                
+                <p style="margin-top: 10px;"><strong>Property Overview:</strong> 0.00-hectare  in  municipality with comprehensive environmental compliance achieved across all assessed domains.</p>
+                <p style="margin-top: 10px;"><strong>Risk Assessment:</strong> Low environmental risk with no critical constraints identified. Property shows good regulatory compliance across flood, air quality, karst, and habitat assessments.</p>
+                
+            </div>
+        </div>
+        
+        <!-- Project Information -->
+        <div class="section">
+            <div class="section-header">1. Project Information</div>
+            <table class="data-table">
+                <tr><th>Project Name</th><td>Template Workflow Test - Juncos PR</td></tr>
+                <tr><th>Location Description</th><td>Environmental Screening Location</td></tr>
+                <tr><th>Coordinates (Lat, Lng)</th><td><div class="copyable-data">18.229400, -65.926600</div></td></tr>
+                <tr><th>Analysis Date</th><td>2025-05-29T11:09:07.071958</td></tr>
+                <tr><th>Project Directory</th><td><div class="copyable-data">output/Template_Workflow_Test_-_Juncos_PR_20250529_110907</div></td></tr>
+            </table>
+        </div>
+        
+        <!-- Enhanced Cadastral Analysis -->
+        
+        <div class="section">
+            <div class="section-header">2. Property & Cadastral Analysis</div>
+            
+            <!-- Basic Property Information -->
+            <table class="data-table">
+                <tr><th>Cadastral Number(s)</th><td><div class="copyable-data"></div></td></tr>
+                <tr><th>Municipality</th><td></td></tr>
+                <tr><th>Neighborhood</th><td></td></tr>
+                <tr><th>Region</th><td></td></tr>
+                <tr><th>Property Area</th><td>0 hectares (0.0 acres)</td></tr>
+                <tr><th>Land Classification</th><td><div class="copyable-data"></div></td></tr>
+                <tr><th>Sub-Classification</th><td></td></tr>
+                <tr><th>Status</th><td></td></tr>
+                <tr><th>Resolution</th><td></td></tr>
+            </table>
+            
+            <!-- Search Metadata -->
+            <div class="metadata-box">
+                <strong>Search Results:</strong> 0 feature(s) found | 
+                Exact Match: No | 
+                Total Area: 0 m²
+            </div>
+            
+            
+            
+            
+        </div>
+        
+        
+        <!-- Enhanced Karst Analysis -->
+        
+        <div class="section">
+            <div class="section-header">3. Karst Analysis (Puerto Rico)</div>
+            <table class="data-table">
+                 <tr><th>Karst Status</th><td>N/A</td></tr>
+                <tr>
+                    <th>Overall Karst Status</th>
+                    <td>
+                        N/A
+                        
+                    </td>
+                </tr>
+                <tr>
+                    <th>Detailed Karst Zone Type</th>
+                    <td>N/A</td>
+                </tr>
+                
+                <tr>
+                    <th>Primary Regulation(s)</th>
+                    <td><div class="copyable-data">N/A</div></td>
+                </tr>
+                <tr>
+                    <th>Summary Message</th>
+                    <td>N/A</td>
+                </tr>
+                
+            </table>
+            
+            
+            
+            
+            
+            
+        </div>
+        
+        
+        <!-- Enhanced Flood Analysis -->
+        
+        
+        <!-- Enhanced Critical Habitat Analysis -->
+        
+        <div class="section">
+            <div class="section-header">6. Critical Habitat Analysis</div>
+            <table class="data-table">
+                <tr><th>Analysis Status</th><td>N/A</td></tr>
+                <tr>
+                    <th>Within Designated Critical Habitat</th>
+                    <td>No</td>
+                </tr>
+                <tr>
+                    <th>Distance to Nearest Habitat</th>
+                    <td>0.8 miles</td>
+                </tr>
+            </table>
+            
+            
+            
+            
+            <div class="subsection-header">Critical Habitat Areas Potentially Affected</div>
+            <ul class="constraint-list">
+                
+                <li>
+                    <strong>West Indian Manatee</strong> (Threatened)<br>
+                    <em>Scientific Name: Trichechus manatus</em><br>
+                    Type: Marine, Distance: 0.8 miles
+                </li>
+                
+            </ul>
+            
+
+            
+            
+            
+            
+            
+            <div class="subsection-header">Recommended Surveys</div>
+            <ul class="constraint-list">
+                
+                <li>Marine mammal surveys</li>
+                
+                <li>Seagrass bed assessment</li>
+                
+            </ul>
+            
+            
+            <!-- Embedded Critical Habitat Map -->
+            
+            <div class="map-container">
+                <div class="subsection-header">Critical Habitat Map</div>
+                <img src="output/Template_Workflow_Test_-_Juncos_PR_20250529_110907/maps/critical_habitat_map_embed.png" alt="Critical Habitat Map" class="map-image" />
+                <div class="map-caption">USFWS Critical Habitat Map showing designated and proposed critical habitats</div>
+            </div>
+            
+        </div>
+        
+        
+        <!-- Enhanced Air Quality Analysis -->
+        
+        
+        <!-- Environmental Constraints Summary -->
+        <div class="section">
+            <div class="section-header">8. Environmental Constraints Summary</div>
+            
+            <div class="alert alert-success">
+                <strong>✓ No major environmental constraints identified</strong>
+            </div>
+            
+        </div>
+        
+        <!-- Environmental Compliance Checklist -->
+        <div class="section">
+            <div class="section-header">9. Environmental Compliance Checklist</div>
+            <table class="checklist-table">
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">Environmental Factor</th>
+                        <th style="width: 15%;">Status</th>
+                        <th style="width: 15%;">Risk Level</th>
+                        <th style="width: 35%;">Action Required</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Flood Zone Compliance</strong><br>
+                            
+                            No flood data available
+                            
+                        </td>
+                        <td class="status-yellow">REVIEW</td>
+                        <td class="status-yellow">MODERATE</td>
+                        <td>Special flood hazard area - consultation required</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Critical Habitat / ESA</strong><br>
+                            
+                            Within Habitat: No<br>
+                            Distance: 0.8 mi
+                            
+                        </td>
+                        <td class="status-green">COMPLIANT</td>
+                        <td class="status-green">LOW</td>
+                        <td>No immediate ESA concerns</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Zoning Compliance</strong><br>
+                            
+                            Classification: <br>
+                            Sub-class: 
+                            
+                        </td>
+                        <td class="status-green">COMPLIANT</td>
+                        <td class="status-green">LOW</td>
+                        <td>Standard zoning compliance</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Air Quality / Emissions</strong><br>
+                            
+                            No air quality data available
+                            
+                        </td>
+                        <td class="status-yellow">REVIEW</td>
+                        <td class="status-yellow">MODERATE</td>
+                        <td>Air quality consultation required</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Karst / Geological</strong><br>
+                            
+                            No karst data available
+                            
+                        </td>
+                        <td class="status-yellow">REVIEW</td>
+                        <td class="status-yellow">MODERATE</td>
+                        <td>Karst considerations required</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div style="margin-top: 15px; font-size: 11px;">
+                <strong>Legend:</strong> 
+                <span class="risk-badge risk-low">GREEN</span> = Compliant/Low Risk | 
+                <span class="risk-badge risk-moderate">YELLOW</span> = Review Required | 
+                <span class="risk-badge risk-high">RED</span> = Consultation/Permit Required
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ccc; text-align: center; font-size: 10px; color: #666;">
+            <p>This report was generated automatically based on available environmental data from government agencies.</p>
+            <p>Consult with qualified environmental professionals for project-specific guidance and regulatory compliance.</p>
+        </div>
+    </div>
+</body>
+</html> 

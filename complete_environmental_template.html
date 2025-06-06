@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{project_name}} - Environmental Screening Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+        }
+        
+        .container {
+            max-width: 8.5in;
+            margin: 0 auto;
+            padding: 0.5in;
+        }
+        
+        /* Header Styles */
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #2c5aa0;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .main-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c5aa0;
+            margin-bottom: 10px;
+        }
+        
+        .project-title {
+            font-size: 20px;
+            color: #444;
+            margin-bottom: 15px;
+        }
+        
+        .analysis-date {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        /* Section Styles */
+        .section {
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }
+        
+        .section-header {
+            background: linear-gradient(135deg, #2c5aa0, #4a7bc8);
+            color: white;
+            padding: 12px 16px;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+        
+        .subsection-header {
+            background: #f0f4f8;
+            color: #2c5aa0;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: bold;
+            margin: 15px 0 8px 0;
+            border-left: 4px solid #2c5aa0;
+        }
+        
+        /* Data Table Styles */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+        
+        .data-table th,
+        .data-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #2c5aa0;
+            width: 30%;
+        }
+        
+        .data-table td {
+            background: #fff;
+        }
+        
+        /* Copyable Data Styles */
+        .copyable-data {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            border-radius: 3px;
+            margin: 5px 0;
+            user-select: all;
+        }
+        
+        /* Alert Boxes */
+        .alert {
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .alert-critical {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .alert-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        /* List Styles */
+        .constraint-list,
+        .requirement-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .constraint-list li,
+        .requirement-list li {
+            background: #f8f9fa;
+            margin: 3px 0;
+            padding: 6px 10px;
+            border-left: 3px solid #2c5aa0;
+            font-size: 12px;
+        }
+        
+        /* Map Embedding */
+        .map-container {
+            text-align: center;
+            margin: 15px 0;
+            page-break-inside: avoid;
+        }
+        
+        .map-image {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .map-caption {
+            font-style: italic;
+            color: #666;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+        
+        /* Checklist Table */
+        .checklist-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 12px;
+        }
+        
+        .checklist-table th,
+        .checklist-table td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        .checklist-table th {
+            background: #2c5aa0;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .status-green {
+            background: #d4edda !important;
+            color: #155724;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status-yellow {
+            background: #fff3cd !important;
+            color: #856404;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status-red {
+            background: #f8d7da !important;
+            color: #721c24;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        /* Print Styles */
+        @media print {
+            body {
+                font-size: 10px;
+            }
+            
+            .section {
+                page-break-inside: avoid;
+            }
+            
+            .map-container {
+                page-break-inside: avoid;
+            }
+            
+            .checklist-table {
+                page-break-inside: avoid;
+            }
+        }
+        
+        /* Executive Summary Box */
+        .executive-summary {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border: 2px solid #2c5aa0;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .risk-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .risk-low {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .risk-moderate {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .risk-high {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="main-title">Comprehensive Environmental Screening Report</div>
+            <div class="project-title">{{project_name}}</div>
+            <div class="analysis-date">Analysis Date: {{analysis_date}}</div>
+        </div>
+        
+        <!-- Executive Summary -->
+        <div class="section">
+            <div class="section-header">Executive Summary</div>
+            <div class="executive-summary">
+                <p><strong>Overall Risk Level:</strong> 
+                    <span class="risk-badge {{risk_class}}">{{overall_risk_level}}</span>
+                </p>
+                {% if executive_summary %}
+                <p style="margin-top: 10px;"><strong>Property Overview:</strong> {{executive_summary.property_overview}}</p>
+                <p style="margin-top: 10px;"><strong>Risk Assessment:</strong> {{executive_summary.risk_assessment}}</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Project Information -->
+        <div class="section">
+            <div class="section-header">1. Project Information</div>
+            <table class="data-table">
+                <tr>
+                    <th>Project Name</th>
+                    <td>{{project_name}}</td>
+                </tr>
+                <tr>
+                    <th>Location Description</th>
+                    <td>{{location_description}}</td>
+                </tr>
+                <tr>
+                    <th>Coordinates (Lat, Lng)</th>
+                    <td><div class="copyable-data">{{coordinates}}</div></td>
+                </tr>
+                <tr>
+                    <th>Analysis Date</th>
+                    <td>{{analysis_date}}</td>
+                </tr>
+                <tr>
+                    <th>Project Directory</th>
+                    <td><div class="copyable-data">{{project_directory}}</div></td>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- Property & Cadastral Analysis -->
+        {% if cadastral_analysis %}
+        <div class="section">
+            <div class="section-header">2. Property & Cadastral Analysis</div>
+            <table class="data-table">
+                <tr>
+                    <th>Cadastral Number(s)</th>
+                    <td><div class="copyable-data">{% for cadastral in cadastral_analysis.cadastral_numbers %}{{cadastral}}{% if not loop.last %}, {% endif %}{% endfor %}</div></td>
+                </tr>
+                <tr>
+                    <th>Municipality</th>
+                    <td>{{cadastral_analysis.municipality}}</td>
+                </tr>
+                <tr>
+                    <th>Neighborhood</th>
+                    <td>{{cadastral_analysis.neighborhood}}</td>
+                </tr>
+                <tr>
+                    <th>Property Area</th>
+                    <td>{{cadastral_analysis.area_acres|round(2)}} acres ({{cadastral_analysis.area_hectares|round(2)}} hectares)</td>
+                </tr>
+                <tr>
+                    <th>Land Use Classification</th>
+                    <td><div class="copyable-data">{{cadastral_analysis.land_use_classification}}</div></td>
+                </tr>
+                <tr>
+                    <th>Zoning Designation</th>
+                    <td><div class="copyable-data">{{cadastral_analysis.zoning_designation}}</div></td>
+                </tr>
+                <tr>
+                    <th>Regulatory Status</th>
+                    <td>{{cadastral_analysis.regulatory_status}}</td>
+                </tr>
+            </table>
+            
+            {% if cadastral_analysis.land_use_classification and ('agricultural' in cadastral_analysis.land_use_classification.lower() or 'farming' in cadastral_analysis.land_use_classification.lower()) %}
+            <div class="alert alert-critical">
+                <strong>🚨 ZONING RESTRICTION:</strong> Agricultural/farming land use may restrict development
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Karst Analysis -->
+        {% if karst_analysis %}
+        <div class="section">
+            <div class="section-header">3. Karst Analysis (Puerto Rico)</div>
+            <table class="data-table">
+                <tr>
+                    <th>Overall Karst Status</th>
+                    <td>
+                        {{karst_analysis.karst_status_general|capitalize}}
+                        {% if karst_analysis.karst_status_general == 'direct' or karst_analysis.karst_status_general == 'buffer' %}
+                            <span class="alert alert-{{ 'critical' if karst_analysis.regulatory_impact_level == 'high' else 'warning' if karst_analysis.regulatory_impact_level == 'moderate' else 'info' }}" style="padding: 2px 6px; margin-left: 10px; font-size: 10px; border-radius: 3px;">
+                                Impact: {{karst_analysis.regulatory_impact_level|capitalize}}
+                            </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Detailed Karst Zone Type</th>
+                    <td>{{karst_analysis.karst_type_detailed if karst_analysis.karst_type_detailed else 'N/A'}}</td>
+                </tr>
+                {% if karst_analysis.specific_zone_description and karst_analysis.specific_zone_description != 'N/A' %}
+                <tr>
+                    <th>Specific Zone Details</th>
+                    <td>{{karst_analysis.specific_zone_description}}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <th>Primary Regulation(s)</th>
+                    <td><div class="copyable-data">{{karst_analysis.primary_regulation_info if karst_analysis.primary_regulation_info else 'N/A'}}</div></td>
+                </tr>
+                <tr>
+                    <th>Summary Message</th>
+                    <td>{{karst_analysis.summary_message if karst_analysis.summary_message else 'N/A'}}</td>
+                </tr>
+                {% if karst_analysis.geological_significance %}
+                <tr>
+                    <th>Geological Significance Notes</th>
+                    <td>{{karst_analysis.geological_significance}}</td>
+                </tr>
+                {% endif %}
+            </table>
+            
+            {% if karst_analysis.regulatory_impact_level == 'high' %}
+            <div class="alert alert-critical">
+                <strong>🚨 HIGH REGULATORY IMPACT:</strong> {{karst_analysis.summary_message}} Refer to PRAPEC regulations.
+            </div>
+            {% elif karst_analysis.regulatory_impact_level == 'moderate' %}
+            <div class="alert alert-warning">
+                <strong>⚠️ MODERATE REGULATORY IMPACT:</strong> {{karst_analysis.summary_message}} Consultation recommended.
+            </div>
+            {% elif karst_analysis.karst_status_general != 'none' %}
+             <div class="alert alert-info">
+                <strong>ℹ️ KARST INFO:</strong> {{karst_analysis.summary_message}}
+            </div>
+            {% endif %}
+            
+            {% if karst_analysis.development_constraints %}
+            <div class="subsection-header">Development Constraints & Considerations</div>
+            <ul class="constraint-list">
+                {% for constraint in karst_analysis.development_constraints %}
+                <li>{{constraint}}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            
+            {% if karst_analysis.permit_requirements %}
+            <div class="subsection-header">Potential Permit Requirements</div>
+            <ul class="requirement-list">
+                {% for requirement in karst_analysis.permit_requirements %}
+                <li>{{requirement}}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Flood Analysis -->
+        {% if flood_analysis %}
+        <div class="section">
+            <div class="section-header">4. Flood Analysis</div>
+            <table class="data-table">
+                <tr>
+                    <th>FEMA Flood Zone</th>
+                    <td><div class="copyable-data">{{flood_analysis.fema_flood_zone}}</div></td>
+                </tr>
+                <tr>
+                    <th>Base Flood Elevation</th>
+                    <td>{{flood_analysis.base_flood_elevation}} feet</td>
+                </tr>
+                <tr>
+                    <th>FIRM Panel</th>
+                    <td><div class="copyable-data">{{flood_analysis.firm_panel}}</div></td>
+                </tr>
+                <tr>
+                    <th>Effective Date</th>
+                    <td>{{flood_analysis.effective_date}}</td>
+                </tr>
+                <tr>
+                    <th>Community Name</th>
+                    <td>{{flood_analysis.community_name}}</td>
+                </tr>
+                {% if flood_analysis.preliminary_vs_effective %}
+                <tr>
+                    <th>Preliminary vs Effective</th>
+                    <td>{{flood_analysis.preliminary_vs_effective}}</td>
+                </tr>
+                {% endif %}
+            </table>
+            
+            {% if flood_analysis.fema_flood_zone not in ['X', 'C'] %}
+            <div class="alert alert-warning">
+                <strong>⚠️ FLOOD CONSULTATION REQUIRED:</strong> Property is in Special Flood Hazard Area ({{flood_analysis.fema_flood_zone}})
+            </div>
+            {% endif %}
+            
+            {% if flood_analysis.regulatory_requirements %}
+            <div class="subsection-header">Regulatory Requirements</div>
+            <ul class="requirement-list">
+                {% for requirement in flood_analysis.regulatory_requirements %}
+                <li>{{requirement}}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            
+            {% if flood_analysis.flood_risk_assessment %}
+            <div class="subsection-header">Flood Risk Assessment</div>
+            <p style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-left: 3px solid #2c5aa0; font-size: 12px;">{{flood_analysis.flood_risk_assessment}}</p>
+            {% endif %}
+            
+            <!-- Embedded Flood Map -->
+            {% if flood_analysis.firme_map_path or flood_analysis.firmette_map_path %}
+            <div class="map-container">
+                <div class="subsection-header">FIRMette Map</div>
+                <img src="{{flood_analysis.firmette_map_path if flood_analysis.firmette_map_path else flood_analysis.firme_map_path}}" alt="FEMA FIRMette Map" class="map-image" />
+                <div class="map-caption">FEMA Flood Insurance Rate Map (FIRMette) - Panel {{flood_analysis.firm_panel}}</div>
+            </div>
+            {% endif %}
+            
+            <!-- Embedded preFIRM Map -->
+            {% if flood_analysis.prefirm_map_path %}
+            <div class="map-container">
+                <div class="subsection-header">Preliminary FIRM Map</div>
+                <img src="{{flood_analysis.prefirm_map_path}}" alt="FEMA Preliminary FIRM Map" class="map-image" />
+                <div class="map-caption">FEMA Preliminary Flood Insurance Rate Map - {{flood_analysis.preliminary_vs_effective}}</div>
+            </div>
+            {% endif %}
+            
+            <!-- Embedded ABFE Map -->
+            {% if flood_analysis.abfe_map_path %}
+            <div class="map-container">
+                <div class="subsection-header">Advisory Base Flood Elevation (ABFE) Map</div>
+                <img src="{{flood_analysis.abfe_map_path}}" alt="FEMA ABFE Map" class="map-image" />
+                <div class="map-caption">FEMA Advisory Base Flood Elevation Map{% if flood_analysis.abfe_data_available %} - ABFE Data Available{% endif %}</div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Wetland Analysis -->
+        {% if wetland_analysis %}
+        <div class="section">
+            <div class="section-header">5. Wetland Analysis</div>
+            <table class="data-table">
+                <tr>
+                    <th>Wetlands on Property</th>
+                    <td>{{wetland_analysis.directly_on_property|yesno}}</td>
+                </tr>
+                <tr>
+                    <th>Within Search Radius</th>
+                    <td>{{wetland_analysis.within_search_radius|yesno}}</td>
+                </tr>
+                <tr>
+                    <th>Distance to Nearest</th>
+                    <td>{{wetland_analysis.distance_to_nearest}} miles</td>
+                </tr>
+            </table>
+            
+            {% if wetland_analysis.directly_on_property %}
+            <div class="alert alert-critical">
+                <strong>🚨 WETLAND CONSULTATION REQUIRED:</strong> Direct wetland impacts - USACE Section 404 permit needed
+            </div>
+            {% elif wetland_analysis.distance_to_nearest and wetland_analysis.distance_to_nearest < 0.5 %}
+            <div class="alert alert-warning">
+                <strong>⚠️ WETLAND PROXIMITY:</strong> Wetlands within 0.5 miles - delineation study recommended
+            </div>
+            {% endif %}
+            
+            {% if wetland_analysis.wetland_classifications %}
+            <div class="subsection-header">Wetland Classifications</div>
+            <ul class="constraint-list">
+                {% for classification in wetland_analysis.wetland_classifications %}
+                <li><div class="copyable-data">{{classification}}</div></li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            
+            {% if wetland_analysis.regulatory_significance %}
+            <div class="subsection-header">Regulatory Significance</div>
+            <ul class="requirement-list">
+                {% for significance in wetland_analysis.regulatory_significance %}
+                <li>{{significance}}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            
+            {% if wetland_analysis.development_guidance %}
+            <div class="subsection-header">Development Guidance</div>
+            <ul class="requirement-list">
+                {% for guidance in wetland_analysis.development_guidance %}
+                <li>{{guidance}}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            
+            <!-- Embedded Wetland Map -->
+            {% if wetland_analysis.nwi_map_path %}
+            <div class="map-container">
+                <div class="subsection-header">NWI Wetlands Map</div>
+                <img src="{{wetland_analysis.nwi_map_path}}" alt="National Wetlands Inventory Map" class="map-image" />
+                <div class="map-caption">National Wetlands Inventory (NWI) Map showing classified wetlands in the analysis area</div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Critical Habitat Analysis -->
+        {% if critical_habitat_analysis %}
+        <div class="section">
+            <div class="section-header">6. Critical Habitat Analysis</div>
+            <table class="data-table">
+                <tr>
+                    <th>Within Designated Critical Habitat</th>
+                    <td>{{critical_habitat_analysis.within_designated_habitat|yesno}}</td>
+                </tr>
+                <tr>
+                    <th>Within Proposed Critical Habitat</th>
+                    <td>{{critical_habitat_analysis.within_proposed_habitat|yesno}}</td>
+                </tr>
+                <tr>
+                    <th>Distance to Nearest Habitat</th>
+                    <td>{{critical_habitat_analysis.distance_to_nearest}} miles</td>
+                </tr>
+            </table>
+            
+            {% if critical_habitat_analysis.within_designated_habitat %}
+            <div class="alert alert-critical">
+                <strong>🚨 ESA CONSULTATION REQUIRED:</strong> Property within designated critical habitat
+            </div>
+            {% elif critical_habitat_analysis.within_proposed_habitat %}
+            <div class="alert alert-warning">
+                <strong>⚠️ ESA CONSULTATION RECOMMENDED:</strong> Property within proposed critical habitat
+            </div>
+            {% endif %}
+            
+            {% if critical_habitat_analysis.affected_species %}
+            <div class="subsection-header">Affected Species</div>
+            <ul class="constraint-list">
+                {% for species in critical_habitat_analysis.affected_species %}
+                <li><div class="copyable-data">{{species}}</div></li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            
+            {% if critical_habitat_analysis.regulatory_implications %}
+            <div class="subsection-header">Regulatory Implications</div>
+            <ul class="requirement-list">
+                {% for implication in critical_habitat_analysis.regulatory_implications %}
+                <li>{{implication}}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            
+            {% if critical_habitat_analysis.development_constraints %}
+            <div class="subsection-header">Development Constraints</div>
+            <ul class="constraint-list">
+                {% for constraint in critical_habitat_analysis.development_constraints %}
+                <li>{{constraint}}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            
+            <!-- Embedded Critical Habitat Map -->
+            {% if critical_habitat_analysis.critical_habitat_map_path %}
+            <div class="map-container">
+                <div class="subsection-header">Critical Habitat Map</div>
+                <img src="{{critical_habitat_analysis.critical_habitat_map_path}}" alt="Critical Habitat Map" class="map-image" />
+                <div class="map-caption">USFWS Critical Habitat Map showing designated and proposed critical habitats</div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Air Quality Analysis -->
+        {% if air_quality_analysis %}
+        <div class="section">
+            <div class="section-header">7. Air Quality Analysis</div>
+            <table class="data-table">
+                <tr>
+                    <th>Nonattainment Status</th>
+                    <td>{{air_quality_analysis.nonattainment_status|yesno}}</td>
+                </tr>
+                <tr>
+                    <th>Area Classification</th>
+                    <td>{{air_quality_analysis.area_classification}}</td>
+                </tr>
+            </table>
+            
+            {% if air_quality_analysis.nonattainment_status %}
+            <div class="alert alert-warning">
+                <strong>⚠️ AIR QUALITY CONSULTATION:</strong> Nonattainment area - emission controls required
+            </div>
+            {% endif %}
+            
+            {% if air_quality_analysis.affected_pollutants %}
+            <div class="subsection-header">Affected Pollutants</div>
+            <ul class="constraint-list">
+                {% for pollutant in air_quality_analysis.affected_pollutants %}
+                <li><div class="copyable-data">{{pollutant}}</div></li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            
+            {% if air_quality_analysis.regulatory_implications %}
+            <div class="subsection-header">Regulatory Implications</div>
+            <ul class="requirement-list">
+                {% for implication in air_quality_analysis.regulatory_implications %}
+                <li>{{implication}}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            
+            <!-- Embedded Air Quality Map -->
+            {% if air_quality_analysis.nonattainment_map_path %}
+            <div class="map-container">
+                <div class="subsection-header">Nonattainment Areas Map</div>
+                <img src="{{air_quality_analysis.nonattainment_map_path}}" alt="EPA Nonattainment Areas Map" class="map-image" />
+                <div class="map-caption">EPA Nonattainment and Maintenance Areas Map showing air quality status</div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Environmental Constraints Summary -->
+        <div class="section">
+            <div class="section-header">8. Environmental Constraints Summary</div>
+            {% if executive_summary and executive_summary.key_environmental_constraints %}
+            <ul class="constraint-list">
+                {% for constraint in executive_summary.key_environmental_constraints %}
+                <li>{{constraint}}</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="alert alert-success">
+                <strong>✓ No major environmental constraints identified</strong>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Regulatory Requirements -->
+        <div class="section">
+            <div class="section-header">9. Key Regulatory Requirements</div>
+            {% if executive_summary and executive_summary.regulatory_highlights %}
+            <ul class="requirement-list">
+                {% for requirement in executive_summary.regulatory_highlights %}
+                <li>{{requirement}}</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="alert alert-info">
+                <strong>ℹ Standard regulatory compliance applies</strong>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Recommendations -->
+        <div class="section">
+            <div class="section-header">10. Recommendations</div>
+            {% if executive_summary and executive_summary.primary_recommendations %}
+            <ul class="requirement-list">
+                {% for recommendation in executive_summary.primary_recommendations %}
+                <li>{{recommendation}}</li>
+                {% endfor %}
+            </ul>
+            {% elif recommendations %}
+            <ul class="requirement-list">
+                {% for recommendation in recommendations %}
+                <li>{{recommendation}}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        
+        <!-- Environmental Compliance Checklist -->
+        <div class="section">
+            <div class="section-header">11. Environmental Compliance Checklist</div>
+            <table class="checklist-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Environmental Factor</th>
+                        <th style="width: 15%;">Status</th>
+                        <th style="width: 20%;">Risk Level</th>
+                        <th style="width: 25%;">Action Required</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Flood Zone -->
+                    <tr>
+                        <td><strong>Flood Zone Compliance</strong><br>
+                            {% if flood_analysis %}
+                            Zone: {{flood_analysis.fema_flood_zone}}
+                            {% else %}
+                            No flood data available
+                            {% endif %}
+                        </td>
+                        <td class="{{flood_status_class}}">{{flood_status}}</td>
+                        <td class="{{flood_risk_class}}">{{flood_risk}}</td>
+                        <td>{{flood_action}}</td>
+                    </tr>
+                    
+                    <!-- Wetlands -->
+                    <tr>
+                        <td><strong>Wetland Compliance</strong><br>
+                            {% if wetland_analysis %}
+                            On Property: {{wetland_analysis.directly_on_property|yesno}}<br>
+                            Distance: {{wetland_analysis.distance_to_nearest}} mi
+                            {% else %}
+                            No wetland data available
+                            {% endif %}
+                        </td>
+                        <td class="{{wetland_status_class}}">{{wetland_status}}</td>
+                        <td class="{{wetland_risk_class}}">{{wetland_risk}}</td>
+                        <td>{{wetland_action}}</td>
+                    </tr>
+                    
+                    <!-- Critical Habitat -->
+                    <tr>
+                        <td><strong>Critical Habitat / ESA</strong><br>
+                            {% if critical_habitat_analysis %}
+                            Within Habitat: {{critical_habitat_analysis.within_designated_habitat|yesno}}<br>
+                            Distance: {{critical_habitat_analysis.distance_to_nearest}} mi
+                            {% else %}
+                            No habitat data available
+                            {% endif %}
+                        </td>
+                        <td class="{{habitat_status_class}}">{{habitat_status}}</td>
+                        <td class="{{habitat_risk_class}}">{{habitat_risk}}</td>
+                        <td>{{habitat_action}}</td>
+                    </tr>
+                    
+                    <!-- Zoning -->
+                    <tr>
+                        <td><strong>Zoning Compliance</strong><br>
+                            {% if cadastral_analysis %}
+                            Zoning: {{cadastral_analysis.zoning_designation}}<br>
+                            Land Use: {{cadastral_analysis.land_use_classification}}
+                            {% else %}
+                            No zoning data available
+                            {% endif %}
+                        </td>
+                        <td class="{{zoning_status_class}}">{{zoning_status}}</td>
+                        <td class="{{zoning_risk_class}}">{{zoning_risk}}</td>
+                        <td>{{zoning_action}}</td>
+                    </tr>
+                    
+                    <!-- Air Quality -->
+                    <tr>
+                        <td><strong>Air Quality / Emissions</strong><br>
+                            {% if air_quality_analysis %}
+                            Nonattainment: {{air_quality_analysis.nonattainment_status|yesno}}<br>
+                            Classification: {{air_quality_analysis.area_classification}}
+                            {% else %}
+                            No air quality data available
+                            {% endif %}
+                        </td>
+                        <td class="{{air_status_class}}">{{air_status}}</td>
+                        <td class="{{air_risk_class}}">{{air_risk}}</td>
+                        <td>{{air_action}}</td>
+                    </tr>
+                    
+                    <!-- Karst -->
+                    <tr>
+                        <td><strong>Karst / Geological</strong><br>
+                            {% if karst_analysis %}
+                            Overall Status: {{karst_analysis.karst_status_general|capitalize}}<br>
+                            Impact: {{karst_analysis.regulatory_impact_level|capitalize}}
+                            {% else %}
+                            No karst data available
+                            {% endif %}
+                        </td>
+                        <td class="{{karst_status_class}}">{{karst_status}}</td>
+                        <td class="{{karst_risk_class}}">{{karst_risk}}</td>
+                        <td>{{karst_action}}</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div style="margin-top: 15px; font-size: 11px;">
+                <strong>Legend:</strong> 
+                <span class="risk-badge risk-low">GREEN</span> = Compliant/Low Risk | 
+                <span class="risk-badge risk-moderate">YELLOW</span> = Review Required | 
+                <span class="risk-badge risk-high">RED</span> = Consultation/Permit Required
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ccc; text-align: center; font-size: 10px; color: #666;">
+            <p>This report was generated automatically based on available environmental data.</p>
+            <p>Consult with qualified environmental professionals for project-specific guidance.</p>
+        </div>
+    </div>
+</body>
+</html> 

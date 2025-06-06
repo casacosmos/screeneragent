@@ -4,7 +4,7 @@ Test script to verify that the nonattainment analysis tool uses existing project
 """
 
 from output_directory_manager import get_output_manager
-from nonattainment_analysis_tool import analyze_nonattainment_with_map
+from legacy.tools.ruined.nonattainment_analysis_tool import analyze_nonattainment_with_map
 
 def test_directory_usage():
     """Test that nonattainment tool uses existing project directory"""

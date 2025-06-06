@@ -10,9 +10,12 @@ import requests
 import json
 import time
 import math
+import os
+import sys
 from typing import Dict, Any, Optional, Tuple, List
 from dataclasses import dataclass
 from datetime import datetime
+
 
 
 @dataclass
@@ -445,41 +448,62 @@ class FEMAABFEClient:
         except Exception as e:
             return False, f"Error generating ABFE map: {str(e)}", None
     
-    def download_abfe_map(self, download_url: str, filename: str = None) -> bool:
+    def download_abfe_map(self, download_url: str, filename: str = None, use_output_manager: bool = True) -> bool:
         """
         Download the ABFE map from the provided URL
         
         Args:
             download_url: URL to download the map from
-            filename: Local filename to save to (optional)
+            filename: Local filename to save to (optional) - if not provided, will auto-generate
+            use_output_manager: Whether to use the output directory manager (default: True)
             
         Returns:
             True if download successful, False otherwise
         """
         
-        if not filename:
-            # Generate filename from timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"abfe_map_{timestamp}.pdf"
-        
         try:
+            if use_output_manager:
+                # Use output directory manager to get proper file path
+                output_manager = get_output_manager()
+                
+                if not filename:
+                    # Generate filename from timestamp
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"abfe_map_{timestamp}.pdf"
+                
+                # Get file path in the reports subdirectory
+                file_path = output_manager.get_file_path(filename, "reports")
+                print(f"📁 Saving ABFE map to project directory: {file_path}")
+                
+            else:
+                # Legacy behavior - save to current directory or specified path
+                if not filename:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"abfe_map_{timestamp}.pdf"
+                file_path = filename
+                print(f"💾 Saving ABFE map to: {file_path}")
+            
             response = self.session.get(download_url, timeout=60)
             response.raise_for_status()
             
-            with open(filename, 'wb') as f:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            with open(file_path, 'wb') as f:
                 f.write(response.content)
             
-            print(f"ABFE map downloaded successfully: {filename}")
+            print(f"✅ ABFE map downloaded successfully: {file_path}")
             return True
             
         except Exception as e:
-            print(f"Error downloading ABFE map: {e}")
+            print(f"❌ Error downloading ABFE map: {e}")
             return False
     
     def generate_and_download_abfe_map(self, longitude: float, latitude: float,
                                       location_name: str = None,
                                       filename: str = None,
-                                      map_format: str = "PDF") -> Tuple[bool, str]:
+                                      map_format: str = "PDF",
+                                      use_output_manager: bool = True) -> Tuple[bool, str]:
         """
         Generate and download an ABFE map in one operation
         
@@ -489,12 +513,13 @@ class FEMAABFEClient:
             location_name: Optional name for the location
             filename: Local filename to save to (optional)
             map_format: Output format (PDF, PNG, JPEG)
+            use_output_manager: Whether to use the output directory manager (default: True)
             
         Returns:
             Tuple of (success, message)
         """
         
-        print(f"Generating ABFE map for coordinates: {latitude}, {longitude}")
+        print(f"🗺️ Generating ABFE map for coordinates: {latitude}, {longitude}")
         
         # Generate the map with full legend
         success, result, job_info = self.generate_abfe_map(
@@ -511,11 +536,11 @@ class FEMAABFEClient:
         if not result:
             return False, "No download URL received"
         
-        print(f"ABFE map generated successfully.")
-        print(f"Download URL: {result}")
+        print(f"✅ ABFE map generated successfully.")
+        print(f"🔗 Download URL: {result}")
         
-        # Download the file
-        if self.download_abfe_map(result, filename):
+        # Download the file using output directory manager
+        if self.download_abfe_map(result, filename, use_output_manager):
             return True, f"ABFE map generated and downloaded successfully"
         else:
             return False, "Map generated but download failed"

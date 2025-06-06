@@ -1,0 +1,36 @@
+# Environmental Report Generator Dependencies
+# Core template rendering
+jinja2>=3.1.0
+
+# PDF Generation Options (install at least one)
+# Option 1: WeasyPrint (recommended - best CSS support)
+weasyprint>=59.0
+
+# Option 2: pdfkit (requires wkhtmltopdf binary)
+# pdfkit>=1.0.0
+
+# Option 3: Playwright (browser-based, excellent rendering)
+# playwright>=1.40.0
+
+# Additional dependencies for enhanced functionality
+Pillow>=10.0.0          # Image processing for embedded maps
+beautifulsoup4>=4.12.0  # HTML parsing and cleanup
+lxml>=4.9.0             # XML/HTML processing
+cssselect>=1.2.0        # CSS selector support
+
+# Data validation and processing
+jsonschema>=4.17.0      # JSON schema validation
+pydantic>=2.0.0         # Data validation and parsing
+
+# File handling and utilities
+pathlib>=1.0.1          # Path manipulation (usually built-in)
+typing-extensions>=4.5.0  # Enhanced type hints
+
+# Optional: Advanced PDF features
+# reportlab>=4.0.0      # Alternative PDF generation
+# pypdf>=3.0.0          # PDF manipulation
+# fitz                  # PDF text extraction (PyMuPDF)
+
+# Development and testing
+pytest>=7.0.0           # Testing framework
+pytest-cov>=4.0.0       # Coverage testing 

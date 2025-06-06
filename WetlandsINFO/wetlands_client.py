@@ -11,9 +11,16 @@ Provides functionality to query wetland data from multiple sources:
 import requests
 import json
 import logging
+import os
+import sys
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Tuple
 from urllib.parse import urlencode
+from datetime import datetime
+
+# Add parent directory to path to import output_directory_manager
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from output_directory_manager import get_output_manager
 
 logger = logging.getLogger(__name__)
 
@@ -804,4 +811,210 @@ class WetlandsClient:
             'watershed_query': f"{self.watershed_url}/query?{param_string}"
         }
         
-        return urls 
+        return urls
+    
+    def save_wetland_data(self, wetland_data: WetlandHabitatInfo, 
+                         filename: str = None, 
+                         use_output_manager: bool = True) -> bool:
+        """
+        Save wetland analysis data to file using output directory manager
+        
+        Args:
+            wetland_data: WetlandHabitatInfo object with analysis results
+            filename: Optional filename (auto-generated if not provided)
+            use_output_manager: Whether to use output directory manager (default: True)
+            
+        Returns:
+            True if save successful, False otherwise
+        """
+        try:
+            # Prepare data for serialization
+            save_data = {
+                'analysis_timestamp': datetime.now().isoformat(),
+                'location': {
+                    'longitude': wetland_data.location[0],
+                    'latitude': wetland_data.location[1]
+                },
+                'summary': {
+                    'has_wetland_data': wetland_data.has_wetland_data,
+                    'has_riparian_data': wetland_data.has_riparian_data,
+                    'has_watershed_data': wetland_data.has_watershed_data,
+                    'total_wetlands': len(wetland_data.wetlands),
+                    'total_riparian_areas': len(wetland_data.riparian_areas),
+                    'total_watersheds': len(wetland_data.watersheds)
+                },
+                'wetlands': [
+                    {
+                        'wetland_id': w.wetland_id,
+                        'wetland_type': w.wetland_type,
+                        'wetland_code': w.wetland_code,
+                        'description': w.description,
+                        'area_acres': w.area_acres,
+                        'location': w.location,
+                        'attributes': w.attributes
+                    } for w in wetland_data.wetlands
+                ],
+                'riparian_areas': [
+                    {
+                        'feature_id': r.feature_id,
+                        'feature_type': r.feature_type,
+                        'description': r.description,
+                        'location': r.location,
+                        'attributes': r.attributes
+                    } for r in wetland_data.riparian_areas
+                ],
+                'watersheds': [
+                    {
+                        'huc_code': w.huc_code,
+                        'huc_level': w.huc_level,
+                        'name': w.name,
+                        'area_sqkm': w.area_sqkm,
+                        'location': w.location,
+                        'attributes': w.attributes
+                    } for w in wetland_data.watersheds
+                ]
+            }
+            
+            if use_output_manager:
+                # Use output directory manager to get proper file path
+                output_manager = get_output_manager()
+                
+                if not filename:
+                    lon, lat = wetland_data.location
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"wetland_analysis_{lon}_{lat}_{timestamp}.json"
+                
+                # Get the file path using output manager
+                file_path = output_manager.get_file_path(filename, "data")
+                
+                # Save the data
+                with open(file_path, 'w') as f:
+                    json.dump(save_data, f, indent=2, default=str)
+                
+                logger.info(f"Wetland data saved to: {file_path}")
+                return True
+            else:
+                # Fallback to current directory
+                if not filename:
+                    lon, lat = wetland_data.location
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"wetland_analysis_{lon}_{lat}_{timestamp}.json"
+                
+                with open(filename, 'w') as f:
+                    json.dump(save_data, f, indent=2, default=str)
+                
+                logger.info(f"Wetland data saved to: {filename}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to save wetland data: {e}")
+            return False
+    
+    def export_wetland_summary_report(self, wetland_data: WetlandHabitatInfo,
+                                     filename: str = None,
+                                     use_output_manager: bool = True) -> bool:
+        """
+        Export a human-readable summary report of wetland data
+        
+        Args:
+            wetland_data: WetlandHabitatInfo object with analysis results
+            filename: Optional filename (auto-generated if not provided)
+            use_output_manager: Whether to use output directory manager (default: True)
+            
+        Returns:
+            True if export successful, False otherwise
+        """
+        try:
+            # Generate report content
+            lon, lat = wetland_data.location
+            report_lines = [
+                "WETLAND AND HABITAT ANALYSIS REPORT",
+                "=" * 50,
+                f"Location: {lat:.6f}°N, {lon:.6f}°W",
+                f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                "",
+                "SUMMARY",
+                "-" * 20,
+                f"Wetlands Found: {len(wetland_data.wetlands)}",
+                f"Riparian Areas Found: {len(wetland_data.riparian_areas)}",
+                f"Watershed Units Found: {len(wetland_data.watersheds)}",
+                "",
+            ]
+            
+            # Add wetland details
+            if wetland_data.wetlands:
+                report_lines.extend([
+                    "WETLAND DETAILS",
+                    "-" * 20
+                ])
+                for i, wetland in enumerate(wetland_data.wetlands, 1):
+                    report_lines.extend([
+                        f"{i}. {wetland.description}",
+                        f"   Type: {wetland.wetland_type}",
+                        f"   Code: {wetland.wetland_code}",
+                        f"   Area: {wetland.area_acres or 'N/A'} acres",
+                        ""
+                    ])
+            
+            # Add riparian details
+            if wetland_data.riparian_areas:
+                report_lines.extend([
+                    "RIPARIAN AREA DETAILS",
+                    "-" * 20
+                ])
+                for i, riparian in enumerate(wetland_data.riparian_areas, 1):
+                    report_lines.extend([
+                        f"{i}. {riparian.description}",
+                        f"   Type: {riparian.feature_type}",
+                        ""
+                    ])
+            
+            # Add watershed details
+            if wetland_data.watersheds:
+                report_lines.extend([
+                    "WATERSHED DETAILS",
+                    "-" * 20
+                ])
+                for i, watershed in enumerate(wetland_data.watersheds, 1):
+                    report_lines.extend([
+                        f"{i}. {watershed.name}",
+                        f"   HUC{watershed.huc_level}: {watershed.huc_code}",
+                        f"   Area: {watershed.area_sqkm or 'N/A'} sq km",
+                        ""
+                    ])
+            
+            # Save the report
+            report_content = "\n".join(report_lines)
+            
+            if use_output_manager:
+                # Use output directory manager to get proper file path
+                output_manager = get_output_manager()
+                
+                if not filename:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"wetland_report_{lon}_{lat}_{timestamp}.txt"
+                
+                # Get the file path using output manager
+                file_path = output_manager.get_file_path(filename, "reports")
+                
+                # Save the report
+                with open(file_path, 'w') as f:
+                    f.write(report_content)
+                
+                logger.info(f"Wetland report saved to: {file_path}")
+                return True
+            else:
+                # Fallback to current directory
+                if not filename:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"wetland_report_{lon}_{lat}_{timestamp}.txt"
+                
+                with open(filename, 'w') as f:
+                    f.write(report_content)
+                
+                logger.info(f"Wetland report saved to: {filename}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to export wetland report: {e}")
+            return False 

@@ -56,7 +56,8 @@ class WetlandMapGeneratorV3:
                                 include_legend: bool = True,
                                 layout_template: str = None,
                                 wetland_transparency: float = 0.8,
-                                output_filename: str = None) -> str:
+                                output_filename: str = None,
+                                output_format: str = "PDF") -> str:
         """
         Generate a wetland map PDF for a specific location
         
@@ -72,6 +73,7 @@ class WetlandMapGeneratorV3:
             layout_template: Optional layout template for the map
             wetland_transparency: Wetland layer transparency (0.0-1.0, default 0.8)
             output_filename: Optional output filename
+            output_format: Output format (PDF, PNG)
             
         Returns:
             Path to the generated PDF file
@@ -98,7 +100,7 @@ class WetlandMapGeneratorV3:
         # Create the Web Map JSON specification
         web_map_json = self._create_web_map_json(
             longitude, latitude, location_name, buffer_miles,
-            base_map, dpi, output_size, include_legend, wetland_transparency
+            base_map, dpi, output_size, include_legend, wetland_transparency, output_format
         )
         
         # Select appropriate layout template
@@ -112,7 +114,7 @@ class WetlandMapGeneratorV3:
         export_params = {
             "f": "json",
             "Web_Map_as_JSON": json.dumps(web_map_json),
-            "Format": "PDF",
+            "Format": output_format,
             "Layout_Template": layout_template
         }
         
@@ -158,14 +160,14 @@ class WetlandMapGeneratorV3:
             print("✅ Map generated successfully!")
             print(f"📄 Map URL: {result_url}")
             
-            # Download the PDF
-            print("\n📥 Downloading PDF...")
-            pdf_path = self._download_pdf(result_url, output_filename)
+            # Download the file (PDF or PNG)
+            print(f"\n📥 Downloading {output_format}...")
+            file_path = self._download_map_file(result_url, output_filename, output_format)
             
-            if pdf_path:
-                print(f"\n✅ Map PDF saved to: {pdf_path}")
+            if file_path:
+                print(f"\n✅ Map {output_format} saved to: {file_path}")
             
-            return pdf_path
+            return file_path
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Request failed: {e}")
@@ -179,7 +181,8 @@ class WetlandMapGeneratorV3:
     def _create_web_map_json(self, longitude: float, latitude: float, 
                             location_name: str, buffer_miles: float,
                             base_map: str, dpi: int, output_size: tuple,
-                            include_legend: bool, wetland_transparency: float) -> Dict[str, Any]:
+                            include_legend: bool, wetland_transparency: float,
+                            output_format: str) -> Dict[str, Any]:
         """Create the Web Map JSON specification following ABFE patterns"""
         
         # Calculate extent based on buffer
@@ -276,7 +279,7 @@ class WetlandMapGeneratorV3:
             "exportOptions": {
                 "outputSize": list(output_size),
                 "dpi": dpi,
-                "format": "PDF"
+                "format": output_format
             },
             "layoutOptions": {
                 "titleText": location_name,
@@ -966,8 +969,8 @@ class WetlandMapGeneratorV3:
             print(f"⚠️  Error checking wetlands: {e}")
             return 0
     
-    def _download_pdf(self, result_url: str, output_filename: str = None) -> Optional[str]:
-        """Download the PDF from the result URL"""
+    def _download_map_file(self, result_url: str, output_filename: str, output_format: str) -> Optional[str]:
+        """Download the map file from the result URL"""
         
         try:
             response = self.session.get(result_url, timeout=60)
@@ -976,20 +979,26 @@ class WetlandMapGeneratorV3:
             # Generate filename if not provided
             if output_filename is None:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_filename = f"wetland_map_{timestamp}.pdf"
+                output_filename = f"wetland_map_{timestamp}.{output_format}"
             
-            # Ensure output directory exists
-            os.makedirs('output', exist_ok=True)
-            output_path = os.path.join('output', output_filename)
+            # Use output directory manager for proper project organization
+            try:
+                from output_directory_manager import get_output_manager
+                output_manager = get_output_manager()
+                output_path = output_manager.get_file_path(output_filename, "maps")
+            except ImportError:
+                # Fallback to output directory
+                os.makedirs('output', exist_ok=True)
+                output_path = os.path.join('output', output_filename)
             
-            # Save the PDF
+            # Save the file
             with open(output_path, 'wb') as f:
                 f.write(response.content)
             
             return output_path
             
         except Exception as e:
-            logger.error(f"Failed to download PDF: {e}")
+            logger.error(f"Failed to download file: {e}")
             return None
     
     def generate_detailed_wetland_map(self, longitude: float, latitude: float,
@@ -1157,7 +1166,7 @@ class WetlandMapGeneratorV3:
             # Download the base PDF
             print("\n📥 Downloading base PDF...")
             temp_base_filename = f"temp_base_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-            base_pdf_path = self._download_pdf(result_url, temp_base_filename)
+            base_pdf_path = self._download_map_file(result_url, temp_base_filename, "pdf")
             
             if not base_pdf_path:
                 print("❌ Failed to download base PDF")

@@ -161,7 +161,7 @@ class ComprehensiveReportGenerator:
                     self.json_files['air_quality'] = data
                 elif 'nonattainment_analysis' in filename:
                     self.json_files['air_quality_detailed'] = data
-                elif 'karst_analysis' in filename or 'batch_karst_analysis' in filename:
+                elif 'karst_analysis' in filename or 'batch_karst_analysis' in filename or 'nearest_karst_search' in filename or 'karst_proximity_analysis' in filename:
                     self.json_files['karst'] = data
                     
             except Exception as e:
@@ -1049,7 +1049,8 @@ class ComprehensiveReportGenerator:
         # Cumulative Risk Assessment
         md.append("## 9. Cumulative Environmental Risk & Development Implications")
         cra = report.cumulative_risk_assessment
-        md.append(f"**Integrated Assessment:** {cra['integrated_assessment']}")
+        integrated_assessment = cra.get('integrated_assessment', 'Comprehensive environmental analysis completed. See individual sections for detailed findings.')
+        md.append(f"**Integrated Assessment:** {integrated_assessment}")
         md.append(f"**Overall Risk Profile:** {cra['overall_risk_profile']}")
         md.append(f"**Development Feasibility:** {cra['development_feasibility']}")
         md.append("")
