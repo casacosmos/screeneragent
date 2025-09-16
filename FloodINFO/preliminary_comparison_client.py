@@ -50,9 +50,49 @@ class FEMAPreliminaryComparisonClient:
         })
     
     def generate_comparison_report(self, longitude: float, latitude: float,
-                                 location_name: str = None) -> Tuple[bool, str, str]:
+                                 location_name: str = None, max_retries: int = 3) -> Tuple[bool, str, str]:
         """
         Generate a Preliminary Comparison report for given coordinates
+        
+        Args:
+            longitude: Longitude coordinate
+            latitude: Latitude coordinate
+            location_name: Optional name for the location
+            max_retries: Maximum number of retry attempts (default: 3)
+            
+        Returns:
+            Tuple of (success, pdf_url_or_error, job_id)
+        """
+        
+        last_error = None
+        last_job_id = None
+        
+        for attempt in range(max_retries):
+            if attempt > 0:
+                # Exponential backoff: 2, 4, 8 seconds
+                wait_time = 2 ** attempt
+                print(f"🔄 Retrying (attempt {attempt + 1}/{max_retries}) after {wait_time} seconds...")
+                time.sleep(wait_time)
+            
+            try:
+                result = self._attempt_comparison_generation(longitude, latitude, location_name)
+                if result[0]:  # Success
+                    return result
+                else:
+                    last_error = result[1]
+                    last_job_id = result[2]
+                    print(f"⚠️  Attempt {attempt + 1} failed: {last_error}")
+            except Exception as e:
+                last_error = str(e)
+                print(f"⚠️  Attempt {attempt + 1} encountered error: {e}")
+        
+        # All retries failed
+        return False, f"Failed after {max_retries} attempts. Last error: {last_error}", last_job_id
+    
+    def _attempt_comparison_generation(self, longitude: float, latitude: float,
+                                     location_name: str = None) -> Tuple[bool, str, str]:
+        """
+        Single attempt to generate a Preliminary Comparison report
         
         Args:
             longitude: Longitude coordinate
@@ -155,14 +195,14 @@ class FEMAPreliminaryComparisonClient:
         except Exception as e:
             return False, f"Error generating Preliminary Comparison report: {str(e)}", None
     
-    def _poll_comparison_job(self, job_id: str, max_wait: int = 120, interval: int = 3) -> Optional[str]:
+    def _poll_comparison_job(self, job_id: str, max_wait: int = 180, interval: int = 3) -> Optional[str]:
         """
         Poll comparison job until completion
         
         Args:
             job_id: Job ID to poll
-            max_wait: Maximum wait time in seconds
-            interval: Poll interval in seconds
+            max_wait: Maximum wait time in seconds (default: 180)
+            interval: Poll interval in seconds (default: 3)
             
         Returns:
             PDF URL if successful, None otherwise
@@ -221,6 +261,22 @@ class FEMAPreliminaryComparisonClient:
                     
                     elif job_status in ['esriJobFailed', 'esriJobCancelled', 'esriJobTimedOut']:
                         print(f"❌ Job failed with status: {job_status}")
+                        
+                        # Try to get error messages from the job
+                        if 'messages' in result:
+                            print("📋 Job error messages:")
+                            for msg in result.get('messages', []):
+                                msg_type = msg.get('type', 'Unknown')
+                                msg_desc = msg.get('description', 'No description')
+                                print(f"   - [{msg_type}] {msg_desc}")
+                        
+                        # Check if there's no preliminary data available
+                        # This is a common reason for failure
+                        messages_text = str(result.get('messages', ''))
+                        if 'no preliminary' in messages_text.lower() or 'no data' in messages_text.lower():
+                            print("ℹ️  No preliminary flood data available for this location")
+                            print("   This means there are no proposed flood map changes for this area.")
+                        
                         return None
                     
                     # Job still running, wait and try again
